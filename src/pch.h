@@ -18,6 +18,7 @@
 #   define NOMINMAX 1
 #   include <Windows.h>
 #   include <d3d11.h>
+#	include <d3d12.h>
 #endif
 
 // Needs to be included before SDL.h
@@ -43,3 +44,40 @@ void SafeDeleteArray(T*& _p) { delete [] _p; _p = nullptr; }
 
 
 #define ArraySize(_arr) ( sizeof((_arr)) / sizeof((_arr)[0]) )
+
+// Auto-releasing wrapper for COM pointers
+template <typename T>
+struct comptr
+{
+	T * p;
+
+	comptr() : p(nullptr) {}
+	comptr(T * other) : p(other) {}
+	comptr(const comptr<T> & other) : p(other.p)
+	{
+		if (p) p->AddRef();
+	}
+
+	void release()
+	{
+		if (p) { p->Release(); p = nullptr; }
+	}
+	~comptr()
+	{
+		release();
+	}
+
+	comptr<T> & operator = (T * other)
+	{
+		release(); p = other; return *this;
+	}
+	comptr<T> & operator = (const comptr<T> & other)
+	{
+		release(); p = other.p; p->AddRef(); return *this;
+	}
+
+	T ** operator & () { return &p; }
+	T * operator * () { return p; }
+	T * operator -> () { return p; }
+	operator T * () { return p; }
+};

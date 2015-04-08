@@ -10,14 +10,14 @@
 #pragma comment(lib, "d3dcompiler.lib")
 
 // Globals
-IDXGIFactory* g_dxgi_factory;
-ID3D11Device* g_d3d_device;
-D3D_FEATURE_LEVEL g_d3d_feature_level;
-ID3D11DeviceContext* g_d3d_context;
+static IDXGIFactory*	g_dxgi_factory;
+ID3D11Device*			g_d3d_device;
+D3D_FEATURE_LEVEL		g_d3d_feature_level;
+ID3D11DeviceContext*	g_d3d_context;
 
 GfxBaseApi *CreateGfxDirect3D11() { return new GfxApiDirect3D11; }
 
-HWND GetHwnd(SDL_Window* _wnd);
+static HWND GetHwnd(SDL_Window* _wnd);
 
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
@@ -54,7 +54,7 @@ bool GfxApiDirect3D11::Init(const std::string& _title, int _x, int _y, int _widt
     // Device flags
     UINT create_device_flags = 0;
 #ifdef _DEBUG
-    create_device_flags |= D3D11_CREATE_DEVICE_DEBUG;
+//    create_device_flags |= D3D11_CREATE_DEVICE_DEBUG;		// it doesn't work on win32 platform, does it??
 #endif
 
     // Feature levels we support

@@ -15,6 +15,7 @@ const size_t kTripleBuffer = 3;
 
 enum class EGfxApi
 {
+	Direct3D12,
     Direct3D11,
     OpenGLGeneric,
     OpenGLCore
@@ -98,4 +99,10 @@ GfxBaseApi *CreateGfxOpenGLCore();
     GfxBaseApi *CreateGfxDirect3D11();
 #else
     inline GfxBaseApi *CreateGfxDirect3D11() { return nullptr; }
+#endif
+
+#if WITH_D3D12
+	GfxBaseApi *CreateGfxDirect3D12();
+#else
+	inline GfxBaseApi *CreateGfxDirect3D12() { return nullptr; }
 #endif

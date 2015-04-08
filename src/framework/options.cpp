@@ -7,6 +7,10 @@
 #   include "gfx_dx11.h"
 #endif
 
+#if WITH_D3D12
+#   include "gfx_dx12.h"
+#endif
+
 #include "gfx_gl.h"
 #include "problems/problem.h"
 #include "solutions/solution.h"
@@ -55,7 +59,7 @@ Options::Options()
 #if _OSX
     , InitialApi(GfxApiOpenGLCore::SGetShortName())
 #else
-    , InitialApi(GfxApiOpenGLGeneric::SGetShortName())
+	, InitialApi(GfxApiOpenGLCore::SGetShortName())
 #endif
 {
 

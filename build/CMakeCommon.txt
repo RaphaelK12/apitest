@@ -6,15 +6,17 @@ set( apitest_SHADER_DIR ${apitest_BIN_DIR}/Shader )
 set( SDL_INCLUDE_DIR "${apitest_SOURCE_DIR}/thirdparty/SDL2-2.0.1/include" )
 
 set( apitest_WITH_D3D11 0 )
+set( apitest_WITH_D3D12 0 )
 
 if( WIN32 )
 	set( apitest_WITH_D3D11 1 ) 
+	set( apitest_WITH_D3D12 1 )
 endif( WIN32 )
 
 if( MSVC )
     set( SDL_LIBRARY_DIR "${CMAKE_BINARY_DIR}/thirdparty/SDL2-2.0.1/\$(Configuration)" )
 
-    set( CMAKE_CXX_FLAGS "/WX /W3 /MP /GR /EHa /arch:SSE2 /D _WIN32=1 /D WITH_D3D11=${apitest_WITH_D3D11}" )
+    set( CMAKE_CXX_FLAGS "/WX /W3 /MP /GR /EHa /arch:SSE2 /D _WIN32=1 /D WITH_D3D11=${apitest_WITH_D3D11} /D WITH_D3D12=${apitest_WITH_D3D12}" )
     set( CMAKE_CXX_FLAGS_DEBUG "/ZI /Od /D _DEBUG=1" )
     set( CMAKE_CXX_FLAGS_RELEASE "/Zi /O2 /D NDEBUG=1" )
 

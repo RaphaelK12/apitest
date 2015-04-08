@@ -126,6 +126,13 @@ if( apitest_WITH_D3D11 )
 	)
 endif( apitest_WITH_D3D11 )
 
+if( apitest_WITH_D3D12 )
+	set( SRCS ${SRCS} 
+		framework/gfx_dx12.cpp
+
+		solutions/untexturedobjects/d3d12/d3d12solution.cpp
+	)
+endif( apitest_WITH_D3D12 )
 
 # Setup PCH
 add_msvc_precompiled_header( "pch.h" "pch.cpp" SRCS )
@@ -152,6 +159,8 @@ source_group( "Framework" FILES
     framework/gfx.h
     framework/gfx_dx11.cpp
     framework/gfx_dx11.h
+	framework/gfx_dx12.cpp
+	framework/gfx_dx12.h
     framework/gfx_gl.cpp
     framework/gfx_gl.h
     framework/mathlib.h
@@ -341,6 +350,11 @@ source_group( "Solutions\\TexturedQuads\\GL\\SparseBindlessTextureArrayMultidraw
 source_group( "Solutions\\UntexturedObjects" FILES 
     solutions/untexturedobjectssoln.cpp
     solutions/untexturedobjectssoln.h
+)
+
+source_group( "Solutions\\UntexturedObjects\\D3D12\\D3D12Solution" FILES 
+	solutions/untexturedobjects/d3d12/D3D12Solution.cpp
+	solutions/untexturedobjects/d3d12/D3D12Solution.h
 )
 
 source_group( "Solutions\\UntexturedObjects\\D3D11\\Naive" FILES 

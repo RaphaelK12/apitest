@@ -52,6 +52,8 @@ HRESULT CreateConstantBuffer(int size, const void* data, ID3D11Buffer** out_buff
 HRESULT CreateDynamicVertexBuffer(int _size, const void* _data, ID3D11Buffer** _out_buffer);
 HRESULT CreateDynamicVertexBuffer(int _size, const void* _data, D3D11_USAGE _usage, UINT _cpuAccessFlags, ID3D11Buffer** _outBuffer);
 
+ID3DBlob* CompileShader(const std::wstring& _shaderFilename, const char* _shaderEntryPoint, const char* _shaderTarget);
+
 // --------------------------------------------------------------------------------------------------------------------
 template <typename T>
 inline ID3D11Buffer* CreateBufferFromVector(const std::vector<T>& _data, D3D11_USAGE _usage, UINT _bindFlags, UINT _cpuAccessFlags=0, UINT _miscFlags=0)

@@ -45,6 +45,9 @@
 #   include "solutions/untexturedobjects/d3d11/naive.h"
 #endif
 
+#if WITH_D3D11
+#	include "solutions\untexturedobjects\d3d12\d3d12solution.h"
+#endif
 
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
@@ -97,10 +100,10 @@ ProblemFactory::ProblemFactory(bool _skipInit)
         mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsGLMultiDraw(true));
         mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsGLMultiDraw(false));
         mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsGLMultiDrawBuffer(true));
-        mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsGLMultiDrawBuffer(false));
+        /*mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsGLMultiDrawBuffer(false));
         mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsGLBindless());
         mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsGLBindlessIndirect());
-        mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsGLBufferRange());
+        mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsGLBufferRange());*/
         mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsGLBufferStorage(true));
         mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsGLBufferStorage(false));
         mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsGLDynamicBuffer());
@@ -110,6 +113,9 @@ ProblemFactory::ProblemFactory(bool _skipInit)
         #if WITH_D3D11
             mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D11Naive());
         #endif
+		#if WITH_D3D12
+			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedD3D12Solution());
+		#endif
     } else {
         newProb->Shutdown();
         SafeDelete(newProb);

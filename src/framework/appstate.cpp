@@ -439,7 +439,7 @@ void ApplicationState::createGfxApis()
     assert(mGfxApis.size() == 0);
 
     GfxBaseApi* tmpApi = nullptr;
-    
+	/* Disable OpenGL (compat) for now
     tmpApi = CreateGfxOpenGLGeneric();
     if (tmpApi) { 
         if (tmpApi->Init("apitest - OpenGL (compat)", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, mResWidth, mResHeight)) {
@@ -448,7 +448,7 @@ void ApplicationState::createGfxApis()
             SafeDelete(tmpApi);
         }
     }
-
+	*/
     tmpApi = CreateGfxOpenGLCore();
     if (tmpApi) { 
         if (tmpApi->Init("apitest - OpenGL (core)", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, mResWidth, mResHeight)) {
@@ -468,6 +468,16 @@ void ApplicationState::createGfxApis()
             SafeDelete(tmpApi);
         }
     }
+
+	tmpApi = CreateGfxDirect3D12();
+	if (tmpApi) {
+		if (tmpApi->Init("apitest - Direct3D12", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, mResWidth, mResHeight)) {
+			mGfxApis[tmpApi->GetShortName()] = tmpApi;
+		}
+		else {
+			SafeDelete(tmpApi);
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
