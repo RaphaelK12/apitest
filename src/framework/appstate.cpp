@@ -457,7 +457,7 @@ void ApplicationState::createGfxApis()
             SafeDelete(tmpApi);
         }
     }
-
+	
 
     tmpApi = CreateGfxDirect3D11();
     if (tmpApi) { 

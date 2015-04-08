@@ -2,24 +2,6 @@
 
 #include "solutions/untexturedobjectssoln.h"
 
-__declspec(align(16)) struct AlignedMatrix
-{
-	float data[16];
-
-	void IdentityMatrix()
-	{
-		memset(data, 0, sizeof(data));
-		data[0] = data[5] = data[10] = data[15] = 1.0f;
-	}
-	void FromMatrix( const Matrix& m )
-	{
-		data[0] = m.x.x; data[1] = m.x.y; data[2] = m.x.z; data[3] = m.x.w;
-		data[4] = m.y.x; data[5] = m.y.y; data[6] = m.y.z; data[7] = m.y.w;
-		data[8] = m.z.x; data[9] = m.z.y; data[10] = m.z.z; data[11] = m.z.w;
-		data[12] = m.w.x; data[13] = m.w.y; data[14] = m.w.z; data[15] = m.w.w;
-	}
-};
-
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
@@ -43,30 +25,34 @@ public:
 private:
 	struct ConstantsBufferData
 	{
-		AlignedMatrix ViewProjection;
-		AlignedMatrix World;
+		Matrix ViewProjection;
+		Matrix World;
 	};
 
-	ID3D12Resource*				m_VertexBuffer;
-	ID3D12Resource*				m_IndexBuffer;
-	ID3D12Resource*				m_ConstantBuffer;
-	ID3D12DescriptorHeap*		m_DescriptorHeap;
-	D3D12_VERTEX_BUFFER_VIEW	m_VertexBufferView;
-	D3D12_INDEX_BUFFER_VIEW		m_IndexBufferView;
+	comptr<ID3D12Resource>				m_VertexBuffer;
+	comptr<ID3D12Resource>				m_IndexBuffer;
+	comptr<ID3D12Resource>				m_ConstantBuffer;
+	comptr<ID3D12DescriptorHeap>		m_DescriptorHeap;
+	D3D12_VERTEX_BUFFER_VIEW			m_VertexBufferView;
+	D3D12_INDEX_BUFFER_VIEW				m_IndexBufferView;
 
-	ID3D12PipelineState*		m_PipelineState;
-	ID3D12RootSignature*		m_RootSignature;
+	comptr<ID3D12PipelineState>			m_PipelineState;
+	comptr<ID3D12RootSignature>			m_RootSignature;
 
-	ID3D12Heap*					m_BufferHeap;
+	comptr<ID3D12Heap>					m_VertexBufferHeap;
+	comptr<ID3D12Heap>					m_IndexBufferHeap;
+	
+	comptr<ID3D12CommandAllocator>		m_CommandAllocator;
+	comptr<ID3D12CommandAllocator>		m_BundleAllocator;
+	comptr<ID3D12GraphicsCommandList>	m_GraphicsCommandList;
+	comptr<ID3D12GraphicsCommandList>	m_Bundle;
+	ConstantsBufferData*				m_ConstantBufferData;
 
-	ID3D12CommandAllocator*		m_CommandAllocator;
-	ID3D12GraphicsCommandList*	m_GraphicsCommandList;
-	ConstantsBufferData*		m_ConstantBufferData;
-
-	size_t						m_IndexCount;
+	size_t								m_IndexCount;
 
 // private method
 	bool	CreatePSO();
 	bool	CreateConstantBuffer();
 	bool	CreateCommandAllocator();
+	bool	RecordBundle( int count );
 };

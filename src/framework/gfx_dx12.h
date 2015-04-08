@@ -68,38 +68,15 @@ ID3D12Resource* CreateBufferFromVector(const std::vector<T>& _data, ID3D12Heap* 
 {
 	const size_t sizeofVertex = sizeof(T);
 	const size_t sizeofVertices = _data.size() * sizeofVertex;
-	/*
-	The whole buffer is created in the wrong way....
-	ID3D12Resource*	buffer = 0;
-	if (FAILED(g_D3D12Device->CreateCommittedResource(
-		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-		D3D12_HEAP_MISC_NONE,
-		&CD3D12_RESOURCE_DESC::Buffer(sizeofVertices),
-		D3D12_RESOURCE_USAGE_GENERIC_READ,
-		nullptr,
-		__uuidof(ID3D12Resource),
-		reinterpret_cast<void**>(&buffer))))
-	{
-		return 0;
-	}
-
-	void* pVertices = nullptr;
-	buffer->Map(0, nullptr, reinterpret_cast<void**>(&pVertices));
-	memcpy(pVertices, _data.data(), sizeofVertices);
-	buffer->Unmap(0, nullptr);
-	*/
-
-	//HRESULT hr = g_D3D12Device->CreateHeap(&CD3D12_HEAP_DESC(s_vertexBufferSize, D3D12_HEAP_TYPE_UPLOAD, 0, D3D12_HEAP_MISC_DENY_TEXTURES),	__uuidof(ID3D12Heap),reinterpret_cast<void**>(&m_pVertexBufferHeap))
 
 	// the buffer
 	ID3D12Resource*	buffer = 0;
 
-	UINT32 buffer_size = _data.size() * sizeof(UntexturedObjectsProblem::Vertex);
 	// Create a placed resource that spans the whole heap
 	if (FAILED(g_D3D12Device->CreatePlacedResource(
 		heap,
 		offset,
-		&CD3D12_RESOURCE_DESC::Buffer(buffer_size),
+		&CD3D12_RESOURCE_DESC::Buffer(sizeofVertices),
 		D3D12_RESOURCE_USAGE_GENERIC_READ,
 		nullptr,
 		__uuidof(ID3D12Resource),
@@ -110,7 +87,7 @@ ID3D12Resource* CreateBufferFromVector(const std::vector<T>& _data, ID3D12Heap* 
 
 	UINT8* pRaw = 0;
 	buffer->Map(0, 0, reinterpret_cast<void**>(&pRaw));
-	memcpy(pRaw, _data.data(), buffer_size);
+	memcpy(pRaw, _data.data(), sizeofVertices);
 	buffer->Unmap(0 , 0);
 
 	return buffer;

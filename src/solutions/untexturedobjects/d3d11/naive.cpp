@@ -137,7 +137,7 @@ void UntexturedObjectsD3D11Naive::Render(const std::vector<Matrix>& _transforms)
     Vec3 at = { 0, 0, 0 };
     Vec3 up = { 0, 0, 1 };
     dir = normalize(dir);
-    Vec3 eye = at - 250 * dir;
+	Vec3 eye = at - 250.0f * dir;
     Matrix view = matrix_look_at(eye, at, up);
     ConstantsPerFrame cFrame;
     cFrame.ViewProjection = mProj * view;

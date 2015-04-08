@@ -7,11 +7,13 @@
 // Globals
 IDXGIFactory*			g_dxgi_factory = 0;
 ID3D12Device*			g_D3D12Device = 0;
-ID3D12CommandQueue*		g_CommandQueue;
-ID3D12CommandAllocator*	g_CommandAllocator;
-ID3D12PipelineState*	g_DefaultPSO;
-ID3D12DescriptorHeap*	g_HeapRTV;
-ID3D12Resource*			g_BackBuffer;
+ID3D12CommandQueue*		g_CommandQueue = 0;
+ID3D12CommandAllocator*	g_CommandAllocator = 0;
+ID3D12PipelineState*	g_DefaultPSO =0;
+ID3D12DescriptorHeap*	g_HeapRTV = 0;
+ID3D12DescriptorHeap*	g_HeapDSV = 0;
+ID3D12Resource*			g_BackBuffer = 0;
+ID3D12Resource*			g_DepthStencilBuffer = 0;
 
 int		g_ClientWidth;
 int		g_ClientHeight;
@@ -263,6 +265,7 @@ void GfxApiDirect3D12::Shutdown()
 	SafeRelease(m_RootSignature);
 	SafeRelease(g_BackBuffer);
 	SafeRelease(g_HeapRTV);
+	SafeRelease(g_HeapDSV);
 	SafeRelease(m_SwapChain);
 
 	SafeRelease(g_D3D12Device);
@@ -316,6 +319,9 @@ void GfxApiDirect3D12::Clear(Vec4 _clearColor, GLfloat _clearDepth)
 
 		// Bind render target for drawing
 		m_CommandList->ClearRenderTargetView(g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), &_clearColor.x, 0, 0);
+
+		// Clear depth buffer
+		m_CommandList->ClearDepthStencilView(g_HeapDSV->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_DEPTH, 1.0f, 0, 0, 0);
 
 		// Close the command list
 		m_CommandList->Close();
@@ -398,7 +404,7 @@ bool GfxApiDirect3D12::CreateSwapChain()
 // Create Render Target
 HRESULT GfxApiDirect3D12::CreateRenderTarget()
 {
-	// Create descriptor heap for RTV (will be populated later in OnResize())
+	// Create descriptor heap for RTV
 	D3D12_DESCRIPTOR_HEAP_DESC heapDescRTV = { D3D12_RTV_DESCRIPTOR_HEAP, 1, };
 	HRESULT hr = g_D3D12Device->CreateDescriptorHeap(&heapDescRTV, __uuidof(ID3D12DescriptorHeap), (void **)&g_HeapRTV);
 	if (FAILED(hr))
@@ -411,6 +417,37 @@ HRESULT GfxApiDirect3D12::CreateRenderTarget()
 
 	// create render target view
 	g_D3D12Device->CreateRenderTargetView(g_BackBuffer, 0, g_HeapRTV->GetCPUDescriptorHandleForHeapStart());
+
+	D3D12_CLEAR_VALUE cv;
+	cv.DepthStencil.Depth = 1.0f;
+	cv.DepthStencil.Stencil = 0;
+	cv.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
+	if (FAILED(g_D3D12Device->CreateCommittedResource(
+		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+		D3D12_HEAP_MISC_NONE,
+		&CD3D12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R24G8_TYPELESS, g_ClientWidth, g_ClientHeight, 1, 1, 1, 0, D3D12_RESOURCE_MISC_ALLOW_DEPTH_STENCIL),
+		D3D12_RESOURCE_USAGE_INITIAL,
+		&cv,
+		__uuidof(ID3D12Resource),
+		reinterpret_cast<void**>(&g_DepthStencilBuffer))))
+	{
+		return false;
+	}
+
+	// Create descriptor heap for DSV
+	D3D12_DESCRIPTOR_HEAP_DESC deapDescDSV = { D3D12_DSV_DESCRIPTOR_HEAP, 1, D3D12_DESCRIPTOR_HEAP_SHADER_VISIBLE };
+	hr = g_D3D12Device->CreateDescriptorHeap(&deapDescDSV, __uuidof(ID3D12DescriptorHeap), (void **)&g_HeapDSV);
+	if (FAILED(hr))
+		return hr;
+
+	D3D12_DEPTH_STENCIL_VIEW_DESC desc;
+	desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+	desc.Texture2D.MipSlice = 0;
+	desc.Flags = D3D12_DSV_NONE;
+	g_D3D12Device->CreateDepthStencilView(g_DepthStencilBuffer, &desc, g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
+
 
 	return S_OK;
 }
