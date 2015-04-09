@@ -123,7 +123,7 @@ inline Vec3 cross(Vec3 a, Vec3 b)
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-inline Matrix transpose(Matrix m)
+inline Matrix transpose(const Matrix& m)
 {
     Matrix r = 
     {

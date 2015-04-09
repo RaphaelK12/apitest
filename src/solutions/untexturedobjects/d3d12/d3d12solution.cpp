@@ -10,11 +10,9 @@ extern ID3D12Resource*			g_BackBuffer;
 extern int	g_ClientWidth;
 extern int	g_ClientHeight;
 
-// hard code for constant buffer size
-static const int	g_ConstantBufferSize = 1024 * 1024 * 64;
-
 UntexturedD3D12Solution::UntexturedD3D12Solution():
-m_ConstantBufferData()
+m_WorldMatrixBufferData(),
+m_ViewProjectionMatrixBufferData()
 {
 }
 
@@ -99,13 +97,15 @@ bool UntexturedD3D12Solution::CreatePSO()
 	comptr<ID3DBlob> psCode = CompileShader(L"cubes_d3d12_naive_ps.hlsl", "psMain", "ps_5_0");
 
 	// Create Root signature
-	D3D12_DESCRIPTOR_RANGE descRanges[1];
+	D3D12_DESCRIPTOR_RANGE descRanges[2];
 	descRanges[0].Init(D3D12_DESCRIPTOR_RANGE_CBV, 1, 0);
+	descRanges[1].Init(D3D12_DESCRIPTOR_RANGE_CBV, 1, 1);
 
-	D3D12_ROOT_PARAMETER rootParameters[1];
+	D3D12_ROOT_PARAMETER rootParameters[2];
 	rootParameters[0].InitAsDescriptorTable(1, &descRanges[0], D3D12_SHADER_VISIBILITY_ALL);
+	rootParameters[1].InitAsDescriptorTable(1, &descRanges[1], D3D12_SHADER_VISIBILITY_ALL);
 
-	D3D12_ROOT_SIGNATURE rootSig = { 1, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
+	D3D12_ROOT_SIGNATURE rootSig = { 2, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
 	ID3DBlob* pBlobRootSig, *pBlobErrors;
 	HRESULT hr = (D3D12SerializeRootSignature(&rootSig, D3D_ROOT_SIGNATURE_V1, &pBlobRootSig, &pBlobErrors));
 	if (FAILED(hr))
@@ -148,12 +148,40 @@ bool UntexturedD3D12Solution::CreatePSO()
 
 bool UntexturedD3D12Solution::CreateConstantBuffer()
 {
-	const D3D12_DESCRIPTOR_HEAP_DESC desc = { D3D12_CBV_SRV_UAV_DESCRIPTOR_HEAP, 262144, D3D12_DESCRIPTOR_HEAP_SHADER_VISIBLE };
+	const D3D12_DESCRIPTOR_HEAP_DESC desc = { D3D12_CBV_SRV_UAV_DESCRIPTOR_HEAP, 262144 + 1 , D3D12_DESCRIPTOR_HEAP_SHADER_VISIBLE };
+
+#if !DISABLE_HEAP0
 	if (FAILED(g_D3D12Device->CreateDescriptorHeap(&desc, __uuidof(ID3D12DescriptorHeap), reinterpret_cast<void**>(&m_DescriptorHeap))))
 	{
 		return false;
 	}
+#endif
 	
+	// Create a (large) constant buffer
+	if (FAILED(g_D3D12Device->CreateCommittedResource(
+		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+		D3D12_HEAP_MISC_NONE,
+		&CD3D12_RESOURCE_DESC::Buffer(sizeof(ConstantsBufferData)),
+		D3D12_RESOURCE_USAGE_GENERIC_READ,
+		nullptr,
+		__uuidof(ID3D12Resource),
+		reinterpret_cast<void**>(&m_ViewProjectionBuffer))))
+	{
+		return false;
+	}
+
+	// Update constants
+	m_ViewProjectionBuffer->Map(0, nullptr, reinterpret_cast<void**>(&m_ViewProjectionMatrixBufferData));
+	
+	// Create Descriptors
+	D3D12_CONSTANT_BUFFER_VIEW_DESC cdesc = { m_ViewProjectionBuffer->GetGPUVirtualAddress(), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT };
+	D3D12_CPU_DESCRIPTOR_HANDLE offset_handle;
+
+#if !DISABLE_HEAP0
+	offset_handle.ptr = m_DescriptorHeap->GetCPUDescriptorHandleForHeapStart().ptr;
+	g_D3D12Device->CreateConstantBufferView(&cdesc, offset_handle);
+#endif
+
 	return true;
 }
 
@@ -196,11 +224,13 @@ bool UntexturedD3D12Solution::RecordBundle(int count)
 
 	m_Bundle->SetPipelineState(m_PipelineState);
 	
-	D3D12_GPU_DESCRIPTOR_HANDLE offset_handle;
-	offset_handle.ptr = m_DescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr + descriptorSize * 0;
-	m_Bundle->SetGraphicsRootDescriptorTable(0, offset_handle);
-
 	for (int u = 0; u < count; ++u) {
+		D3D12_GPU_DESCRIPTOR_HANDLE offset_handle;
+		offset_handle.ptr = m_DescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr + descriptorSize * (u + 1);
+		m_Bundle->SetGraphicsRootDescriptorTable(0, offset_handle);
+		offset_handle.ptr = m_DescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr;
+		m_Bundle->SetGraphicsRootDescriptorTable(1, offset_handle);
+
 		// draw the instance
 		m_Bundle->DrawInstanced(m_IndexCount, 1, 0, 0);
 	}
@@ -214,12 +244,14 @@ void UntexturedD3D12Solution::Render(const std::vector<Matrix>& _transforms)
 	if (FAILED(m_CommandAllocator->Reset()))
 		return;
 
-	static int descriptorSize = g_D3D12Device->GetDescriptorHandleIncrementSize(D3D12_CBV_SRV_UAV_DESCRIPTOR_HEAP);
+	static int descriptorSize = g_D3D12Device->GetDescriptorHandleIncrementSize(D3D12_CBV_SRV_UAV_DESCRIPTOR_HEAP) ;
 	static const UINT cbvIncrement = (sizeof(ConstantsBufferData)+(D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1)) & ~(D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1);
-	int total_count =  _transforms.size() ;
+	unsigned int total_count = _transforms.size();
 
-	if (!m_ConstantBufferData)
+	if (!m_WorldMatrixBufferData)
 	{
+		#if !DISABLE_HEAP0
+
 		// Create a (large) constant buffer
 		if (FAILED(g_D3D12Device->CreateCommittedResource(
 			&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
@@ -228,25 +260,26 @@ void UntexturedD3D12Solution::Render(const std::vector<Matrix>& _transforms)
 			D3D12_RESOURCE_USAGE_GENERIC_READ,
 			nullptr,
 			__uuidof(ID3D12Resource),
-			reinterpret_cast<void**>(&m_ConstantBuffer))))
+			reinterpret_cast<void**>(&m_WorldMatrixBuffer))))
 		{
 			return;
 		}
 
 		// Update constants
-		m_ConstantBuffer->Map(0, nullptr, reinterpret_cast<void**>(&m_ConstantBufferData));
+		m_WorldMatrixBuffer->Map(0, nullptr, reinterpret_cast<void**>(&m_WorldMatrixBufferData));
 
-		for (int i = 0; i < total_count;++i)
+		for (unsigned int i = 0; i < total_count ; ++i)
 		{
 			// Create a constant buffer descriptor
-			D3D12_CONSTANT_BUFFER_VIEW_DESC cdesc = { m_ConstantBuffer->GetGPUVirtualAddress() + cbvIncrement * i, cbvIncrement };
+			D3D12_CONSTANT_BUFFER_VIEW_DESC cdesc = { m_WorldMatrixBuffer->GetGPUVirtualAddress() + cbvIncrement * i, cbvIncrement };
 			D3D12_CPU_DESCRIPTOR_HANDLE offset_handle;
-			offset_handle.ptr = m_DescriptorHeap->GetCPUDescriptorHandleForHeapStart().ptr + descriptorSize * i;
+			offset_handle.ptr = m_DescriptorHeap->GetCPUDescriptorHandleForHeapStart().ptr + descriptorSize * (i + 1);
 			g_D3D12Device->CreateConstantBufferView(&cdesc, offset_handle);
 		}
 
+#endif
 		// record bundle
-		RecordBundle(total_count);
+		//RecordBundle(total_count);
 	}
 
 	// Program
@@ -256,11 +289,18 @@ void UntexturedD3D12Solution::Render(const std::vector<Matrix>& _transforms)
 	dir = normalize(dir);
 	Vec3 eye = at - 250.0f * dir;
 	Matrix view = matrix_look_at(eye, at, up);
-	for (int i = 0; i < total_count; ++i)
-	{
-		m_ConstantBufferData[i].ViewProjection = (mProj * view);
-		m_ConstantBufferData[i].World = (transpose(_transforms[i]));
-	}
+
+	int size = sizeof(MatrixBuffer);
+	// Copy matrix
+	//memcpy(m_WorldMatrixBufferData, _transforms.data(), sizeof(MatrixBuffer)* _transforms.size());
+
+#if !DISABLE_HEAP0
+	for (unsigned int i = 0; i < (unsigned int)total_count; ++i)
+		m_WorldMatrixBufferData[4 * i].m = transpose(_transforms[i]);
+#endif
+
+	// setup viewprojection matrix
+	m_ViewProjectionMatrixBufferData->m = mProj * view;
 
 	// Create Command List first time invoked
 	if (true)
@@ -270,9 +310,6 @@ void UntexturedD3D12Solution::Render(const std::vector<Matrix>& _transforms)
 
 		// Setup root signature
 		m_GraphicsCommandList->SetGraphicsRootSignature(m_RootSignature);
-
-		// Setup descriptor heaps
-		m_GraphicsCommandList->SetDescriptorHeaps(&m_DescriptorHeap, 1);
 
 		// Setup viewport
 		D3D12_VIEWPORT viewport = { 0, 0, FLOAT(g_ClientWidth), FLOAT(g_ClientHeight), 0.0f, 1.0f };
@@ -293,16 +330,27 @@ void UntexturedD3D12Solution::Render(const std::vector<Matrix>& _transforms)
 		m_GraphicsCommandList->SetVertexBuffers(0, &m_VertexBufferView, 1);
 		//m_GraphicsCommandList->SetIndexBuffer(&m_IndexBufferView);
 
-		for (int u = 0; u < total_count; ++u) {
+//		AddResourceBarrier(m_GraphicsCommandList, m_WorldMatrixBuffer1, D3D12_RESOURCE_USAGE_COPY_DEST, D3D12_RESOURCE_USAGE_GENERIC_READ);
+
+#if !DISABLE_HEAP0
+		for (unsigned int u = 0; u < total_count ; ++u) {
+			// Setup descriptor heaps
+			m_GraphicsCommandList->SetDescriptorHeaps(&m_DescriptorHeap, 1);
+
 			// Setup constant buffer
 			D3D12_GPU_DESCRIPTOR_HANDLE offset_handle;
-			offset_handle.ptr = m_DescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr + descriptorSize * u;
+			offset_handle.ptr = m_DescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr + descriptorSize * ( u + 1 );
 			m_GraphicsCommandList->SetGraphicsRootDescriptorTable(0, offset_handle);
+			offset_handle.ptr = m_DescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr;
+			m_GraphicsCommandList->SetGraphicsRootDescriptorTable(1, offset_handle);
 
 			// draw the instance
 			//m_GraphicsCommandList->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
 			m_GraphicsCommandList->DrawInstanced(m_IndexCount, 1, 0, 0);
 		}
+#endif
+
+//		AddResourceBarrier(m_GraphicsCommandList, m_WorldMatrixBuffer1, D3D12_RESOURCE_USAGE_GENERIC_READ, D3D12_RESOURCE_USAGE_COPY_DEST);
 	}
 	else
 	{
@@ -339,11 +387,13 @@ void UntexturedD3D12Solution::Render(const std::vector<Matrix>& _transforms)
 
 void UntexturedD3D12Solution::Shutdown()
 {
-	m_ConstantBufferData = 0;
+	m_WorldMatrixBufferData = 0;
+	m_ViewProjectionMatrixBufferData = 0;
 
 	m_VertexBuffer.release();
 	m_IndexBuffer.release();
-	m_ConstantBuffer.release();
+	m_WorldMatrixBuffer.release();
+	m_ViewProjectionBuffer.release();
 	m_DescriptorHeap.release();
 	m_PipelineState.release();
 	m_RootSignature.release();

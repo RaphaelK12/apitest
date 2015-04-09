@@ -15,6 +15,11 @@ ID3D12DescriptorHeap*	g_HeapDSV = 0;
 ID3D12Resource*			g_BackBuffer = 0;
 ID3D12Resource*			g_DepthStencilBuffer = 0;
 
+// Finish fence
+ID3D12Fence* g_FinishFence;
+UINT64 g_finishFenceValue;
+HANDLE g_finishFenceEvent;
+
 int		g_ClientWidth;
 int		g_ClientHeight;
 
@@ -217,7 +222,9 @@ const BYTE g_DefaultPixelShader[] =
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
 GfxApiDirect3D12::GfxApiDirect3D12():
-m_CommandList()
+m_BCommandList(),
+m_ECommandList(),
+m_CommandListInit(false)
 {
 }
 
@@ -251,13 +258,20 @@ bool GfxApiDirect3D12::Init(const std::string& _title, int _x, int _y, int _widt
 	if (!CreateSwapChain())
 		return false;
 
+	// Create a fence
+	hr = (g_D3D12Device->CreateFence(g_finishFenceValue, D3D12_FENCE_MISC_NONE, __uuidof(ID3D12Fence), reinterpret_cast<void**>(&g_FinishFence)));
+	if (FAILED(hr))
+		return false;
+	g_finishFenceEvent = CreateEvent(nullptr, FALSE, FALSE, "Finish fence event");
+
 	return true;
 }
 
 // --------------------------------------------------------------------------------------------------------------------
 void GfxApiDirect3D12::Shutdown()
 {
-	SafeRelease(m_CommandList);
+	SafeRelease(m_BCommandList);
+	SafeRelease(m_ECommandList);
 	SafeRelease(g_CommandAllocator);
 	SafeRelease(g_CommandQueue);
 
@@ -299,9 +313,10 @@ void GfxApiDirect3D12::Clear(Vec4 _clearColor, GLfloat _clearDepth)
 		return;
 
 	// Create Command List first time invoked
+	if (!m_CommandListInit)
 	{
 		// reset command list
-		m_CommandList->Reset(g_CommandAllocator, 0);
+		m_BCommandList->Reset(g_CommandAllocator, 0);
 
 		//AddResourceBarrier(m_CommandList, g_BackBuffer, D3D12_RESOURCE_USAGE_INITIAL, D3D12_RESOURCE_USAGE_RENDER_TARGET);
 
@@ -315,29 +330,30 @@ void GfxApiDirect3D12::Clear(Vec4 _clearColor, GLfloat _clearDepth)
 				D3D12_RESOURCE_USAGE_RENDER_TARGET,
 			} },
 		};
-		m_CommandList->ResourceBarrier(1, &barrierDesc);
+		m_BCommandList->ResourceBarrier(1, &barrierDesc);
 
 		// Bind render target for drawing
-		m_CommandList->ClearRenderTargetView(g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), &_clearColor.x, 0, 0);
+		m_BCommandList->ClearRenderTargetView(g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), &_clearColor.x, 0, 0);
 
 		// Clear depth buffer
-		m_CommandList->ClearDepthStencilView(g_HeapDSV->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_DEPTH, 1.0f, 0, 0, 0);
+		m_BCommandList->ClearDepthStencilView(g_HeapDSV->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_DEPTH, 1.0f, 0, 0, 0);
 
 		// Close the command list
-		m_CommandList->Close();
+		m_BCommandList->Close();
 	}
 
 	// Execute Command List
-	g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&m_CommandList);
+	g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&m_BCommandList);
 }
 
 // --------------------------------------------------------------------------------------------------------------------
 void GfxApiDirect3D12::SwapBuffers()
 {
 	// Create Command List first time invoked
+	if (!m_CommandListInit)
 	{
 		// reset command list
-		m_CommandList->Reset(g_CommandAllocator, 0);
+		m_ECommandList->Reset(g_CommandAllocator, 0);
 
 		D3D12_RESOURCE_BARRIER_DESC barrierDesc =
 		{
@@ -349,13 +365,21 @@ void GfxApiDirect3D12::SwapBuffers()
 				D3D12_RESOURCE_USAGE_PRESENT,
 			} },
 		};
-		m_CommandList->ResourceBarrier(1, &barrierDesc);
+		m_ECommandList->ResourceBarrier(1, &barrierDesc);
 
 		// Close the command list
-		m_CommandList->Close();
+		m_ECommandList->Close();
 	}
 
-	g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&m_CommandList);
+	m_CommandListInit = false;
+
+	// execute command list
+	g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&m_ECommandList);
+
+	// Fence the commands before present
+	g_CommandQueue->Signal(g_FinishFence, ++g_finishFenceValue);
+	g_FinishFence->SetEventOnCompletion(g_finishFenceValue, g_finishFenceEvent);
+	WaitForSingleObject(g_finishFenceEvent, INFINITE);
 
 	// Present
 	m_SwapChain->Present(0, 0);
@@ -513,8 +537,12 @@ HRESULT GfxApiDirect3D12::CreateDefaultCommandQueue()
 		return false;
 
 	// Command list
-	g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, g_CommandAllocator, g_DefaultPSO, __uuidof(ID3D12CommandList), (void**)&m_CommandList);
-	m_CommandList->Close();
+	g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, g_CommandAllocator, g_DefaultPSO, __uuidof(ID3D12CommandList), (void**)&m_BCommandList);
+	m_BCommandList->Close();
+
+	// Command list
+	g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, g_CommandAllocator, g_DefaultPSO, __uuidof(ID3D12CommandList), (void**)&m_ECommandList);
+	m_ECommandList->Close();
 
 	return S_OK;
 }

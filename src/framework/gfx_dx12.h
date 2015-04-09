@@ -32,8 +32,12 @@ protected:
 
 	// Root Signature
 	ID3D12RootSignature*	m_RootSignature;
-	// Command List
-	ID3D12GraphicsCommandList*	m_CommandList;
+	// Begin Command List
+	ID3D12GraphicsCommandList*	m_BCommandList;
+	// End Command List
+	ID3D12GraphicsCommandList*	m_ECommandList;
+	// command list initiailzed
+	bool					m_CommandListInit;
 
 	// Create Swap Chain
 	bool CreateSwapChain();

@@ -29,9 +29,15 @@ private:
 		Matrix World;
 	};
 
+	struct MatrixBuffer
+	{
+		Matrix m;
+	};
+
 	comptr<ID3D12Resource>				m_VertexBuffer;
 	comptr<ID3D12Resource>				m_IndexBuffer;
-	comptr<ID3D12Resource>				m_ConstantBuffer;
+	comptr<ID3D12Resource>				m_WorldMatrixBuffer;
+	comptr<ID3D12Resource>				m_ViewProjectionBuffer;
 	comptr<ID3D12DescriptorHeap>		m_DescriptorHeap;
 	D3D12_VERTEX_BUFFER_VIEW			m_VertexBufferView;
 	D3D12_INDEX_BUFFER_VIEW				m_IndexBufferView;
@@ -46,9 +52,13 @@ private:
 	comptr<ID3D12CommandAllocator>		m_BundleAllocator;
 	comptr<ID3D12GraphicsCommandList>	m_GraphicsCommandList;
 	comptr<ID3D12GraphicsCommandList>	m_Bundle;
-	ConstantsBufferData*				m_ConstantBufferData;
+	MatrixBuffer*						m_WorldMatrixBufferData;
+	MatrixBuffer*						m_ViewProjectionMatrixBufferData;
 
 	size_t								m_IndexCount;
+
+	HANDLE			m_signalEvent;
+	HANDLE			m_waitEvent;
 
 // private method
 	bool	CreatePSO();

@@ -167,6 +167,8 @@ void UntexturedObjectsD3D11Naive::Render(const std::vector<Matrix>& _transforms)
     size_t xformCount = _transforms.size();
     assert(xformCount <= mObjectCount);
 
+	Matrix m = _transforms[xformCount - 1];
+
     ConstantsPerDraw cDraw;
     for (size_t u = 0; u < xformCount; ++u) {
         cDraw.World = transpose(_transforms[u]);
