@@ -28,14 +28,12 @@ public:
 	static const char* SGetLongName() { return "Direct3D 12"; }
 
 protected:
-	IDXGISwapChain* m_SwapChain;
+	comptr<IDXGISwapChain> m_SwapChain;
 
-	// Root Signature
-	ID3D12RootSignature*	m_RootSignature;
 	// Begin Command List
-	ID3D12GraphicsCommandList*	m_BCommandList;
+	comptr<ID3D12GraphicsCommandList>	m_BCommandList;
 	// End Command List
-	ID3D12GraphicsCommandList*	m_ECommandList;
+	comptr<ID3D12GraphicsCommandList>	m_ECommandList;
 	// command list initiailzed
 	bool					m_CommandListInit;
 
@@ -45,8 +43,6 @@ protected:
 	HRESULT CreateRenderTarget();
 	// Create Depth Buffer
 	HRESULT CreateDepthBuffer();
-	// Create Default PSO
-	HRESULT CreateDefaultPSO();
 	// Create Default Command Queue
 	HRESULT CreateDefaultCommandQueue();
 };
@@ -55,10 +51,7 @@ protected:
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
 // DX12 Utilities
-extern ID3D12Device*			g_D3D12Device;
-extern ID3D12CommandQueue*		g_CommandQueue;
-extern ID3D12CommandAllocator*	g_CommandAllocator;
-extern ID3D12PipelineState*		g_DefaultPSO;
+extern comptr<ID3D12Device>			g_D3D12Device;
 
 // Helper routine for resource barriers
 void AddResourceBarrier(
@@ -68,7 +61,7 @@ void AddResourceBarrier(
 	D3D12_RESOURCE_USAGE usageAfter);
 
 template <typename T>
-ID3D12Resource* CreateBufferFromVector(const std::vector<T>& _data, ID3D12Heap* heap , UINT64 offset )
+ID3D12Resource* CreateBufferFromVector(const std::vector<T>& _data, ID3D12Heap* heap, UINT64 offset, ID3D12GraphicsCommandList* cl )
 {
 	const size_t sizeofVertex = sizeof(T);
 	const size_t sizeofVertices = _data.size() * sizeofVertex;

@@ -4,9 +4,10 @@
 #include "framework/gfx_dx11.h"	// for some utility function
 #include <d3dcompiler.h>
 
-extern ID3D12DescriptorHeap*	g_HeapRTV;
-extern ID3D12DescriptorHeap*	g_HeapDSV;
-extern ID3D12Resource*			g_BackBuffer;
+extern comptr<ID3D12DescriptorHeap>	g_HeapRTV;
+extern comptr<ID3D12DescriptorHeap>	g_HeapDSV;
+extern comptr<ID3D12Resource>			g_BackBuffer;
+extern comptr<ID3D12CommandQueue>		g_CommandQueue;
 extern int	g_ClientWidth;
 extern int	g_ClientHeight;
 
@@ -24,59 +25,9 @@ bool UntexturedD3D12Solution::Init(const std::vector<UntexturedObjectsProblem::V
 	if (sizeof(UntexturedObjectsProblem::Vertex) * _vertices.size() + sizeof(UntexturedObjectsProblem::Index) * _indices.size() > size)
 		return false;	// not enough memory allocated
 
-	if (FAILED(g_D3D12Device->CreateHeap(
-		&CD3D12_HEAP_DESC(size, D3D12_HEAP_TYPE_UPLOAD, 0, D3D12_HEAP_MISC_DENY_TEXTURES),
-		__uuidof(ID3D12Heap),
-		reinterpret_cast<void**>(&m_VertexBufferHeap))))
+	// Create copy command list
+	if (!CreateCommandAllocator())
 		return false;
-	/*if (FAILED(g_D3D12Device->CreateHeap(
-		&CD3D12_HEAP_DESC(size, D3D12_HEAP_TYPE_UPLOAD, 0, D3D12_HEAP_MISC_DENY_TEXTURES),
-		__uuidof(ID3D12Heap),
-		reinterpret_cast<void**>(&m_IndexBufferHeap))))
-		return false;
-
-	m_VertexBuffer = CreateBufferFromVector(_vertices, m_VertexBufferHeap, 0);
-	m_IndexBuffer = CreateBufferFromVector(_indices, m_IndexBufferHeap, 0);
-	if (!m_VertexBuffer || !m_IndexBuffer)
-		return false;
-	*/
-	// Index buffer not working , use vertex buffer as a workaround here
-	{
-		const size_t sizeofVertex = sizeof(UntexturedObjectsProblem::Vertex);
-		const size_t sizeofVertices = _indices.size() * sizeofVertex;
-
-		// Create a placed resource that spans the whole heap
-		if (FAILED(g_D3D12Device->CreatePlacedResource(
-			m_VertexBufferHeap,
-			0,
-			&CD3D12_RESOURCE_DESC::Buffer(1024*1024),
-			D3D12_RESOURCE_USAGE_GENERIC_READ,
-			nullptr,
-			__uuidof(ID3D12Resource),
-			reinterpret_cast<void**>(&m_VertexBuffer))))
-		{
-			return 0;
-		}
-
-		UntexturedObjectsProblem::Vertex* pRaw = 0;
-		m_VertexBuffer->Map(0, 0, reinterpret_cast<void**>(&pRaw));
-
-		int i = 0;
-		std::vector<UntexturedObjectsProblem::Index>::const_iterator it = _indices.begin();
-		while (it != _indices.end())
-		{
-			//memcpy(pRaw, _data.data(), sizeofVertices);
-			pRaw[i] = _vertices[*it];
-			++it;
-			i++;
-		}
-		m_VertexBuffer->Unmap(0, 0);
-	}
-
-	m_IndexCount = _indices.size();
-
-	m_VertexBufferView = D3D12_VERTEX_BUFFER_VIEW{ m_VertexBuffer->GetGPUVirtualAddress(), sizeof(UntexturedObjectsProblem::Vertex) * _indices.size(), sizeof(UntexturedObjectsProblem::Vertex) };
-//	m_IndexBufferView = D3D12_INDEX_BUFFER_VIEW{ m_IndexBuffer->GetGPUVirtualAddress(), sizeof(UntexturedObjectsProblem::Index), DXGI_FORMAT_R16_UINT };
 
 	if (!CreatePSO())
 		return false;
@@ -84,8 +35,26 @@ bool UntexturedD3D12Solution::Init(const std::vector<UntexturedObjectsProblem::V
 	if (!CreateConstantBuffer())
 		return false;
 
-	if (!CreateCommandAllocator())
+	if (FAILED(g_D3D12Device->CreateHeap(
+		&CD3D12_HEAP_DESC(size, D3D12_HEAP_TYPE_UPLOAD, 0, D3D12_HEAP_MISC_DENY_TEXTURES),
+		__uuidof(ID3D12Heap),
+		reinterpret_cast<void**>(&m_VertexBufferHeap))))
 		return false;
+	if (FAILED(g_D3D12Device->CreateHeap(
+		&CD3D12_HEAP_DESC(size, D3D12_HEAP_TYPE_UPLOAD, 0, D3D12_HEAP_MISC_DENY_TEXTURES),
+		__uuidof(ID3D12Heap),
+		reinterpret_cast<void**>(&m_IndexBufferHeap))))
+		return false;
+
+	m_VertexBuffer = CreateBufferFromVector(_vertices, m_VertexBufferHeap, 0, m_CopyCommandList);
+	m_IndexBuffer = CreateBufferFromVector(_indices, m_IndexBufferHeap, 0, m_CopyCommandList);
+	if (!m_VertexBuffer || !m_IndexBuffer)
+		return false;
+
+	m_IndexCount = _indices.size();
+
+	m_VertexBufferView = D3D12_VERTEX_BUFFER_VIEW{ m_VertexBuffer->GetGPUVirtualAddress(), sizeof(UntexturedObjectsProblem::Vertex) * _vertices.size(), sizeof(UntexturedObjectsProblem::Vertex) };
+	m_IndexBufferView = D3D12_INDEX_BUFFER_VIEW{ m_IndexBuffer->GetGPUVirtualAddress(), sizeof(UntexturedObjectsProblem::Index) * _indices.size(), DXGI_FORMAT_R16_UINT };
 
 	return true;
 }
@@ -103,6 +72,7 @@ bool UntexturedD3D12Solution::CreatePSO()
 
 	D3D12_ROOT_PARAMETER rootParameters[2];
 	rootParameters[0].InitAsDescriptorTable(1, &descRanges[0], D3D12_SHADER_VISIBILITY_ALL);
+	//rootParameters[0].InitAsConstants(32, 0);
 	rootParameters[1].InitAsDescriptorTable(1, &descRanges[1], D3D12_SHADER_VISIBILITY_ALL);
 
 	D3D12_ROOT_SIGNATURE rootSig = { 2, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
@@ -150,18 +120,14 @@ bool UntexturedD3D12Solution::CreateConstantBuffer()
 {
 	const D3D12_DESCRIPTOR_HEAP_DESC desc = { D3D12_CBV_SRV_UAV_DESCRIPTOR_HEAP, 262144 + 1 , D3D12_DESCRIPTOR_HEAP_SHADER_VISIBLE };
 
-#if !DISABLE_HEAP0
 	if (FAILED(g_D3D12Device->CreateDescriptorHeap(&desc, __uuidof(ID3D12DescriptorHeap), reinterpret_cast<void**>(&m_DescriptorHeap))))
-	{
 		return false;
-	}
-#endif
-	
+
 	// Create a (large) constant buffer
 	if (FAILED(g_D3D12Device->CreateCommittedResource(
 		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
 		D3D12_HEAP_MISC_NONE,
-		&CD3D12_RESOURCE_DESC::Buffer(sizeof(ConstantsBufferData)),
+		&CD3D12_RESOURCE_DESC::Buffer(sizeof(MatrixBuffer)),
 		D3D12_RESOURCE_USAGE_GENERIC_READ,
 		nullptr,
 		__uuidof(ID3D12Resource),
@@ -177,10 +143,8 @@ bool UntexturedD3D12Solution::CreateConstantBuffer()
 	D3D12_CONSTANT_BUFFER_VIEW_DESC cdesc = { m_ViewProjectionBuffer->GetGPUVirtualAddress(), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT };
 	D3D12_CPU_DESCRIPTOR_HANDLE offset_handle;
 
-#if !DISABLE_HEAP0
 	offset_handle.ptr = m_DescriptorHeap->GetCPUDescriptorHandleForHeapStart().ptr;
 	g_D3D12Device->CreateConstantBufferView(&cdesc, offset_handle);
-#endif
 
 	return true;
 }
@@ -191,7 +155,7 @@ bool UntexturedD3D12Solution::CreateCommandAllocator()
 	if (FAILED(g_D3D12Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), reinterpret_cast<void**>(&m_CommandAllocator))))
 		return false;
 
-	if (FAILED(g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, m_CommandAllocator, m_PipelineState, __uuidof(ID3D12CommandList), (void**)&m_GraphicsCommandList)))
+	if (FAILED(g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, m_CommandAllocator, 0, __uuidof(ID3D12CommandList), (void**)&m_GraphicsCommandList)))
 		return false;
 	m_GraphicsCommandList->Close();
 	
@@ -199,9 +163,17 @@ bool UntexturedD3D12Solution::CreateCommandAllocator()
 	if (FAILED(g_D3D12Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_BUNDLE, __uuidof(ID3D12CommandAllocator), reinterpret_cast<void**>(&m_BundleAllocator))))
 		return false;
 
-	if (FAILED(g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_BUNDLE, m_BundleAllocator, m_PipelineState, __uuidof(ID3D12GraphicsCommandList), reinterpret_cast<void**>(&m_Bundle))))
+	if (FAILED(g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_BUNDLE, m_BundleAllocator, 0, __uuidof(ID3D12GraphicsCommandList), reinterpret_cast<void**>(&m_Bundle))))
 		return false;
 	m_Bundle->Close();
+
+	// Create a command allocator
+	if (FAILED(g_D3D12Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_BUNDLE, __uuidof(ID3D12CommandAllocator), reinterpret_cast<void**>(&m_CopyCommandAllocator))))
+		return false;
+
+	if (FAILED(g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_BUNDLE, m_CopyCommandAllocator, 0, __uuidof(ID3D12GraphicsCommandList), reinterpret_cast<void**>(&m_CopyCommandList))))
+		return false;
+	m_CopyCommandList->Close();
 	
 	return true;
 }
@@ -224,14 +196,15 @@ bool UntexturedD3D12Solution::RecordBundle(int count)
 
 	m_Bundle->SetPipelineState(m_PipelineState);
 	
+	D3D12_GPU_DESCRIPTOR_HANDLE offset_handle;
+	offset_handle.ptr = m_DescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr;
+	m_Bundle->SetGraphicsRootDescriptorTable(1, offset_handle);
+	
 	for (int u = 0; u < count; ++u) {
-		D3D12_GPU_DESCRIPTOR_HANDLE offset_handle;
+		// draw the instance
 		offset_handle.ptr = m_DescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr + descriptorSize * (u + 1);
 		m_Bundle->SetGraphicsRootDescriptorTable(0, offset_handle);
-		offset_handle.ptr = m_DescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr;
-		m_Bundle->SetGraphicsRootDescriptorTable(1, offset_handle);
 
-		// draw the instance
 		m_Bundle->DrawInstanced(m_IndexCount, 1, 0, 0);
 	}
 	m_Bundle->Close();
@@ -244,14 +217,13 @@ void UntexturedD3D12Solution::Render(const std::vector<Matrix>& _transforms)
 	if (FAILED(m_CommandAllocator->Reset()))
 		return;
 
+	static bool use_bundle = false;
 	static int descriptorSize = g_D3D12Device->GetDescriptorHandleIncrementSize(D3D12_CBV_SRV_UAV_DESCRIPTOR_HEAP) ;
-	static const UINT cbvIncrement = (sizeof(ConstantsBufferData)+(D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1)) & ~(D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1);
+	static const UINT cbvIncrement = (sizeof(MatrixBuffer)+(D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1)) & ~(D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1);
 	unsigned int total_count = _transforms.size();
 
 	if (!m_WorldMatrixBufferData)
 	{
-		#if !DISABLE_HEAP0
-
 		// Create a (large) constant buffer
 		if (FAILED(g_D3D12Device->CreateCommittedResource(
 			&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
@@ -264,7 +236,20 @@ void UntexturedD3D12Solution::Render(const std::vector<Matrix>& _transforms)
 		{
 			return;
 		}
-
+		/*
+		// Create a (large) constant buffer
+		if (FAILED(g_D3D12Device->CreateCommittedResource(
+			&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+			D3D12_HEAP_MISC_NONE,
+			&CD3D12_RESOURCE_DESC::Buffer(cbvIncrement*total_count),
+			D3D12_RESOURCE_USAGE_GENERIC_READ,
+			nullptr,
+			__uuidof(ID3D12Resource),
+			reinterpret_cast<void**>(&m_WorldMatrixBufferGPU))))
+		{
+			return;
+		}
+		*/
 		// Update constants
 		m_WorldMatrixBuffer->Map(0, nullptr, reinterpret_cast<void**>(&m_WorldMatrixBufferData));
 
@@ -277,9 +262,9 @@ void UntexturedD3D12Solution::Render(const std::vector<Matrix>& _transforms)
 			g_D3D12Device->CreateConstantBufferView(&cdesc, offset_handle);
 		}
 
-#endif
 		// record bundle
-		//RecordBundle(total_count);
+		if (use_bundle)
+			RecordBundle(total_count);
 	}
 
 	// Program
@@ -289,27 +274,31 @@ void UntexturedD3D12Solution::Render(const std::vector<Matrix>& _transforms)
 	dir = normalize(dir);
 	Vec3 eye = at - 250.0f * dir;
 	Matrix view = matrix_look_at(eye, at, up);
-
 	int size = sizeof(MatrixBuffer);
-	// Copy matrix
-	//memcpy(m_WorldMatrixBufferData, _transforms.data(), sizeof(MatrixBuffer)* _transforms.size());
-
-#if !DISABLE_HEAP0
 	for (unsigned int i = 0; i < (unsigned int)total_count; ++i)
-		m_WorldMatrixBufferData[4 * i].m = transpose(_transforms[i]);
-#endif
-
+		m_WorldMatrixBufferData[4 * i].m = _transforms[i];
 	// setup viewprojection matrix
 	m_ViewProjectionMatrixBufferData->m = mProj * view;
-
+	/*
+	{
+		m_GraphicsCommandList->Reset(m_CommandAllocator, 0);
+		m_GraphicsCommandList->CopyBufferRegion(m_WorldMatrixBufferGPU, 0, m_WorldMatrixBuffer, 0, cbvIncrement*total_count, D3D12_COPY_NONE);
+		m_GraphicsCommandList->Close();
+		// Execute Command List
+		g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&m_GraphicsCommandList);
+	}*/
+	
 	// Create Command List first time invoked
-	if (true)
+	if (!use_bundle)
 	{
 		// Reset command list
 		m_GraphicsCommandList->Reset(m_CommandAllocator, 0);
 
 		// Setup root signature
 		m_GraphicsCommandList->SetGraphicsRootSignature(m_RootSignature);
+
+		// Setup descriptor heaps
+		m_GraphicsCommandList->SetDescriptorHeaps(&m_DescriptorHeap, 1);
 
 		// Setup viewport
 		D3D12_VIEWPORT viewport = { 0, 0, FLOAT(g_ClientWidth), FLOAT(g_ClientHeight), 0.0f, 1.0f };
@@ -328,29 +317,22 @@ void UntexturedD3D12Solution::Render(const std::vector<Matrix>& _transforms)
 		// Draw the triangle
 		m_GraphicsCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		m_GraphicsCommandList->SetVertexBuffers(0, &m_VertexBufferView, 1);
-		//m_GraphicsCommandList->SetIndexBuffer(&m_IndexBufferView);
+		m_GraphicsCommandList->SetIndexBuffer(&m_IndexBufferView);
 
-//		AddResourceBarrier(m_GraphicsCommandList, m_WorldMatrixBuffer1, D3D12_RESOURCE_USAGE_COPY_DEST, D3D12_RESOURCE_USAGE_GENERIC_READ);
-
-#if !DISABLE_HEAP0
+		D3D12_GPU_DESCRIPTOR_HANDLE offset_handle;
+		offset_handle.ptr = m_DescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr;
+		m_GraphicsCommandList->SetGraphicsRootDescriptorTable(1, offset_handle);
+		
 		for (unsigned int u = 0; u < total_count ; ++u) {
-			// Setup descriptor heaps
-			m_GraphicsCommandList->SetDescriptorHeaps(&m_DescriptorHeap, 1);
-
-			// Setup constant buffer
-			D3D12_GPU_DESCRIPTOR_HANDLE offset_handle;
-			offset_handle.ptr = m_DescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr + descriptorSize * ( u + 1 );
+			// Setup constant buffer	
+			offset_handle.ptr = m_DescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr + descriptorSize * (u + 1);
 			m_GraphicsCommandList->SetGraphicsRootDescriptorTable(0, offset_handle);
-			offset_handle.ptr = m_DescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr;
-			m_GraphicsCommandList->SetGraphicsRootDescriptorTable(1, offset_handle);
-
+			//Matrix identity = matrix_identity();
+			//m_GraphicsCommandList->SetGraphicsRoot32BitConstants(0, &identity, 0, 16);
+			
 			// draw the instance
-			//m_GraphicsCommandList->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
-			m_GraphicsCommandList->DrawInstanced(m_IndexCount, 1, 0, 0);
+			m_GraphicsCommandList->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
 		}
-#endif
-
-//		AddResourceBarrier(m_GraphicsCommandList, m_WorldMatrixBuffer1, D3D12_RESOURCE_USAGE_GENERIC_READ, D3D12_RESOURCE_USAGE_COPY_DEST);
 	}
 	else
 	{
