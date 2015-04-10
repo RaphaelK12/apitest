@@ -45,12 +45,6 @@ set( SHADERS
     ../bin/Shaders/glsl/textures_gl_sparse_bindless_texture_array_multidraw_vs.glsl
     ../bin/Shaders/glsl/textures_gl_sparse_bindless_texture_array_multidraw_fs.glsl
 
-	../bin/Shaders/hlsl/cubes_d3d11_naive_vs.hlsl
-	../bin/Shaders/hlsl/cubes_d3d11_naive_ps.hlsl
-	../bin/Shaders/hlsl/streaming_vb_d3d11_vs.hlsl
-    ../bin/Shaders/hlsl/streaming_vb_d3d11_ps.hlsl
-    ../bin/Shaders/hlsl/textures_d3d11_naive_vs.hlsl
-    ../bin/Shaders/hlsl/textures_d3d11_naive_ps.hlsl
 )
 
 set( SRCS
@@ -441,6 +435,29 @@ source_group( "Solutions\\UntexturedObjects\\GL\\Uniforms" FILES
     ../bin/Shaders/glsl/cubes_gl_uniform_vs.glsl
     ../bin/Shaders/glsl/cubes_gl_uniform_fs.glsl
 )
+
+# Check for DirectX
+  if(DIRECTX)
+    if("$ENV{DXSDK_DIR_INC}" STREQUAL "")
+      message_error("DIRECTX requires the \$DXSDK_DIR_INC environment variable to be set")
+    endif("$ENV{DXSDK_DIR_INC}" STREQUAL "")
+	if("$ENV{DXSDK_DIR_LIB}" STREQUAL "")
+      message_error("DIRECTX requires the \$DXSDK_DIR_LIB environment variable to be set")
+    endif("$ENV{DXSDK_DIR_LIB}" STREQUAL "")
+    set(CMAKE_REQUIRED_FLAGS "/I\"$ENV{DXSDK_DIR_INC}\"")
+    check_include_file(d3d9.h HAVE_D3D_H)
+    check_include_file(ddraw.h HAVE_DDRAW_H)
+    check_include_file(dsound.h HAVE_DSOUND_H)
+    check_include_file(dinput.h HAVE_DINPUT_H)
+    check_include_file(xaudio2.h HAVE_XAUDIO2_H)
+    if(HAVE_D3D_H OR HAVE_DDRAW_H OR HAVE_DSOUND_H OR HAVE_DINPUT_H OR HAVE_XAUDIO2_H)
+      set(HAVE_DIRECTX TRUE)
+      # TODO: change $ENV{DXSDL_DIR_LIB} to get the path from the include checks
+      link_directories($ENV{DXSDK_DIR_LIB}\\${PROCESSOR_ARCH})
+      include_directories($ENV{DXSDK_DIR_INC}\\)
+    endif()
+    set(CMAKE_REQUIRED_FLAGS)
+  endif(DIRECTX)
 
 if( MSVC )
         target_link_libraries( apitest ${SDL_LIBRARY_DIR}/SDL2.lib )
