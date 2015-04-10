@@ -11,7 +11,6 @@ To build, you will need a Cmake 2.8 (or later) install. C++11 features are
 used, so you will need to ensure you have at least the requested compiler
 for your platform. See below for platform-specific instructions to build:
 
-
 Windows (from a cmd prompt in the directory README.md is located in)
 =======
     mkdir _out
@@ -22,6 +21,11 @@ Windows (from a cmd prompt in the directory README.md is located in)
 The Debug and Release configurations are run regularly, so they should
 continue work just fine for you out of the box.
 
+System Environment
+=======
+DXSDK_DIR_INC   include folder in windows sdk that contains d3d12.h and other dx12 header files
+DXSDK_DIR_LIB   library folder in windows sdk that contains d3d12.lib and other library files
+The above environment variables need to be setup on your system.
 
 Unix / OSX (from a cmd prompt in the directory README.md is located in)
 =======
