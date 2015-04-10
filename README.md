@@ -23,9 +23,9 @@ continue work just fine for you out of the box.
 
 System Environment
 =======
-DXSDK_DIR_INC   include folder in windows sdk that contains d3d12.h and other dx12 header files
-DXSDK_DIR_LIB   library folder in windows sdk that contains d3d12.lib and other library files
-The above environment variables need to be setup on your system.
+DXSDK_DIR_INC (include folder in windows sdk that contains d3d12.h and other dx12 header files)
+DXSDK_DIR_LIB (library folder in windows sdk that contains d3d12.lib and other library files)
+The two environment variables need to be setup on your system.
 
 Unix / OSX (from a cmd prompt in the directory README.md is located in)
 =======
