@@ -61,7 +61,7 @@ void AddResourceBarrier(
 	D3D12_RESOURCE_USAGE usageAfter);
 
 template <typename T>
-ID3D12Resource* CreateBufferFromVector(const std::vector<T>& _data, ID3D12Heap* heap, UINT64 offset, ID3D12GraphicsCommandList* cl )
+ID3D12Resource* CreateBufferFromVector(const std::vector<T>& _data, ID3D12Heap* heap, UINT64 offset )
 {
 	const size_t sizeofVertex = sizeof(T);
 	const size_t sizeofVertices = _data.size() * sizeofVertex;
