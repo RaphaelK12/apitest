@@ -45,7 +45,7 @@
 #   include "solutions/untexturedobjects/d3d11/naive.h"
 #endif
 
-#if WITH_D3D11
+#if WITH_D3D12
 #	include "solutions\untexturedobjects\d3d12\d3d12solution.h"
 #endif
 

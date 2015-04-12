@@ -346,10 +346,12 @@ source_group( "Solutions\\UntexturedObjects" FILES
     solutions/untexturedobjectssoln.h
 )
 
+if( apitest_WITH_D3D12 )
 source_group( "Solutions\\UntexturedObjects\\D3D12\\D3D12Solution" FILES 
 	solutions/untexturedobjects/d3d12/D3D12Solution.cpp
 	solutions/untexturedobjects/d3d12/D3D12Solution.h
 )
+endif( apitest_WITH_D3D12 )
 
 source_group( "Solutions\\UntexturedObjects\\D3D11\\Naive" FILES 
 	solutions/untexturedobjects/d3d11/naive.cpp

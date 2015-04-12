@@ -18,7 +18,10 @@
 #   define NOMINMAX 1
 #   include <Windows.h>
 #   include <d3d11.h>
-#	include <d3d12.h>
+
+#if WITH_D3D12
+	#include <d3d12.h>
+#endif
 #endif
 
 // Needs to be included before SDL.h

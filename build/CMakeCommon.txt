@@ -13,6 +13,11 @@ if( WIN32 )
 	set( apitest_WITH_D3D12 1 )
 endif( WIN32 )
 
+set_option(DISABLE_D3D12 "Disable D3D12 Renderer" ${WIN32})
+if(DISABLE_D3D12)
+	set( apitest_WITH_D3D12 0 )
+endif(DISABLE_D3D12)
+
 if( MSVC )
     set( SDL_LIBRARY_DIR "${CMAKE_BINARY_DIR}/thirdparty/SDL2-2.0.1/\$(Configuration)" )
 
