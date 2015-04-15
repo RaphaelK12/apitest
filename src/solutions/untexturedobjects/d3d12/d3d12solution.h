@@ -31,7 +31,6 @@ private:
 	comptr<ID3D12Resource>				m_VertexBuffer;
 	comptr<ID3D12Resource>				m_IndexBuffer;
 	comptr<ID3D12Resource>				m_WorldMatrixBuffer;
-	//comptr<ID3D12Resource>				m_WorldMatrixBufferGPU;
 	comptr<ID3D12Resource>				m_ViewProjectionBuffer;
 	comptr<ID3D12DescriptorHeap>		m_DescriptorHeap;
 	comptr<ID3D12Resource>				m_UploadBuffer;
@@ -44,12 +43,8 @@ private:
 
 	comptr<ID3D12Heap>					m_VertexBufferHeap;
 	
-	comptr<ID3D12CommandAllocator>		m_CommandAllocator;
 	comptr<ID3D12CommandAllocator>		m_BundleAllocator;
-	comptr<ID3D12CommandAllocator>		m_CopyCommandAllocator;
-	comptr<ID3D12GraphicsCommandList>	m_GraphicsCommandList;
 	comptr<ID3D12GraphicsCommandList>	m_Bundle;
-	comptr<ID3D12GraphicsCommandList>	m_CopyCommandList;
 	MatrixBuffer*						m_WorldMatrixBufferData;
 	MatrixBuffer*						m_ViewProjectionMatrixBufferData;
 
@@ -65,6 +60,5 @@ private:
 	bool	CreatePSO();
 	bool	CreateConstantBuffer(UINT total_count);
 	bool	CreateCommandAllocator();
-	bool	RecordBundle( int count );
 	bool	CreateCommandSignature();
 };

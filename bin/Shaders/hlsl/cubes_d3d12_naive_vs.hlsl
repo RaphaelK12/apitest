@@ -34,7 +34,7 @@ VsOutput vsMain(VsInput I)
 	pos.y += I.id * 2;
 	O.f4Position = mul(float4(pos, 1.0f), ViewProjection1);*/
 	O.f4Position = mul(mul(World, float4(I.f3Position, 1.0f)), ViewProjection);
-	//O.f4Position = mul(float4(I.f3Position, 1.0f), ViewProjection1); 
+	//O.f4Position = mul(float4(I.f3Position, 1.0f), ViewProjection); 
     O.f3Color = I.f3Color;
 
     return O;

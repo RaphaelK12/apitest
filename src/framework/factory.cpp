@@ -47,6 +47,8 @@
 
 #if WITH_D3D12
 #	include "solutions\untexturedobjects\d3d12\d3d12solution.h"
+#	include "solutions\untexturedobjects\d3d12\setconstants.h"
+#	include "solutions\untexturedobjects\d3d12\setconstantbufferview.h"
 #endif
 
 // --------------------------------------------------------------------------------------------------------------------
@@ -114,6 +116,8 @@ ProblemFactory::ProblemFactory(bool _skipInit)
             mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D11Naive());
         #endif
 		#if WITH_D3D12
+			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12SetConstants());
+			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12SetConstantBufferView());
 			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedD3D12Solution());
 		#endif
     } else {

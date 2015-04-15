@@ -28,14 +28,7 @@ public:
 	static const char* SGetLongName() { return "Direct3D 12"; }
 
 protected:
-	comptr<IDXGISwapChain> m_SwapChain;
-
-	// Begin Command List
-	comptr<ID3D12GraphicsCommandList>	m_BCommandList;
-	// End Command List
-	comptr<ID3D12GraphicsCommandList>	m_ECommandList;
-	// command list initiailzed
-	bool					m_CommandListInit;
+	comptr<IDXGISwapChain>				m_SwapChain;
 
 	// Create Swap Chain
 	bool CreateSwapChain();

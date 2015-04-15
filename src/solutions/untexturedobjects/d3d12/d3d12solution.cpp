@@ -4,14 +4,15 @@
 #include "framework/gfx_dx11.h"	// for some utility function
 #include <d3dcompiler.h>
 
-extern comptr<ID3D12DescriptorHeap>	g_HeapRTV;
-extern comptr<ID3D12DescriptorHeap>	g_HeapDSV;
-extern comptr<ID3D12Resource>			g_BackBuffer;
-extern comptr<ID3D12CommandQueue>		g_CommandQueue;
+extern comptr<ID3D12DescriptorHeap>			g_HeapRTV;
+extern comptr<ID3D12DescriptorHeap>			g_HeapDSV;
+extern comptr<ID3D12Resource>				g_BackBuffer;
+extern comptr<ID3D12CommandQueue>			g_CommandQueue;
+extern comptr<ID3D12GraphicsCommandList>	g_CommandList;
 extern int	g_ClientWidth;
 extern int	g_ClientHeight;
 
-extern ID3D12Fence* g_FinishFence;
+extern comptr<ID3D12Fence> g_FinishFence;
 extern UINT64 g_finishFenceValue;
 extern HANDLE g_finishFenceEvent;
 
@@ -20,8 +21,8 @@ static bool g_UseBundle = false;
 static size_t g_SegmentCount = 1;
 
 #define	USE_CONSTANTS	0
-#define	USE_INDIRECT	1
-#define USE_BUNDLE		1
+#define USE_CBV_DIRECT	1
+#define	USE_INDIRECT	0
 
 UntexturedD3D12Solution::UntexturedD3D12Solution():
 m_WorldMatrixBufferData(),
@@ -36,17 +37,17 @@ bool UntexturedD3D12Solution::Init(const std::vector<UntexturedObjectsProblem::V
 	m_DescriptorSize = g_D3D12Device->GetDescriptorHandleIncrementSize(D3D12_CBV_SRV_UAV_DESCRIPTOR_HEAP);
 
 	// Create copy command list
-	if (!CreateCommandAllocator())
-		return false;
-
+	//if (!CreateCommandAllocator())
+	//	return false;
+	
 	if (!CreatePSO())
 		return false;
 
 	if (!CreateGeometryBuffer(_vertices, _indices))
 		return false;
 
-	if (!CreateCommandSignature())
-		return false;
+	//if (!CreateCommandSignature())
+//		return false;
 
 	if (!CreateConstantBuffer(_objectCount))
 		return false;
@@ -151,6 +152,9 @@ bool UntexturedD3D12Solution::CreatePSO()
 #if USE_CONSTANTS
 	rootParameters[0].InitAsConstants(16, 0);
 	rootParameters[1].InitAsConstants(16, 1);
+#elif USE_CBV_DIRECT
+	rootParameters[0].InitAsConstantBufferView(0);
+	rootParameters[1].InitAsConstantBufferView(1);
 #else
 	rootParameters[0].InitAsDescriptorTable(1, &descRanges[0], D3D12_SHADER_VISIBILITY_ALL);
 	rootParameters[1].InitAsDescriptorTable(1, &descRanges[1], D3D12_SHADER_VISIBILITY_ALL);
@@ -262,28 +266,15 @@ bool UntexturedD3D12Solution::CreateConstantBuffer(UINT total_count)
 		// Create a constant buffer descriptor
 		D3D12_CONSTANT_BUFFER_VIEW_DESC cdesc = { m_WorldMatrixBuffer->GetGPUVirtualAddress() + cbvIncrement * i , cbvIncrement };
 		D3D12_CPU_DESCRIPTOR_HANDLE offset_handle;
-		offset_handle.ptr = m_DescriptorHeap->GetCPUDescriptorHandleForHeapStart().ptr + m_DescriptorSize * (i + 1);
+		offset_handle.ptr = m_DescriptorHeap->GetCPUDescriptorHandleForHeapStart().ptr + m_DescriptorSize * (i+1);
 		g_D3D12Device->CreateConstantBufferView(&cdesc, offset_handle);
 	}
-
-	// record bundle
-#if USE_BUNDLE
-	RecordBundle(total_count);
-#endif
 
 	return true;
 }
 
 bool UntexturedD3D12Solution::CreateCommandAllocator()
 {
-	// Create a command allocator
-	if (FAILED(g_D3D12Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), reinterpret_cast<void**>(&m_CommandAllocator))))
-		return false;
-
-	if (FAILED(g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, m_CommandAllocator, 0, __uuidof(ID3D12CommandList), (void**)&m_GraphicsCommandList)))
-		return false;
-	m_GraphicsCommandList->Close();
-	
 	// Create a command allocator
 	if (FAILED(g_D3D12Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_BUNDLE, __uuidof(ID3D12CommandAllocator), reinterpret_cast<void**>(&m_BundleAllocator))))
 		return false;
@@ -292,14 +283,6 @@ bool UntexturedD3D12Solution::CreateCommandAllocator()
 		return false;
 	m_Bundle->Close();
 
-	// Create a command allocator
-	if (FAILED(g_D3D12Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_BUNDLE, __uuidof(ID3D12CommandAllocator), reinterpret_cast<void**>(&m_CopyCommandAllocator))))
-		return false;
-
-	if (FAILED(g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_BUNDLE, m_CopyCommandAllocator, 0, __uuidof(ID3D12GraphicsCommandList), reinterpret_cast<void**>(&m_CopyCommandList))))
-		return false;
-	m_CopyCommandList->Close();
-	
 	return true;
 }
 
@@ -320,59 +303,8 @@ bool UntexturedD3D12Solution::CreateCommandSignature()
 	return true;
 }
 
-bool UntexturedD3D12Solution::RecordBundle(int count)
-{
-	m_Bundle->Reset(m_BundleAllocator, 0);
-	
-	// Setup root signature
-	m_Bundle->SetGraphicsRootSignature(m_RootSignature);
-
-	// Setup descriptor heaps
-	m_Bundle->SetDescriptorHeaps(&m_DescriptorHeap, 1);
-
-	// Draw the triangle
-	m_Bundle->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	m_Bundle->SetVertexBuffers(0, &m_VertexBufferView, 1);
-	m_Bundle->SetIndexBuffer(&m_IndexBufferView);
-
-	m_Bundle->SetPipelineState(m_PipelineState);
-	
-
-	#if USE_CONSTANTS
-		//m_Bundle->SetGraphicsRoot32BitConstants(1, &vp, 0, 16);
-	#else
-		D3D12_GPU_DESCRIPTOR_HANDLE offset_handle;
-		offset_handle.ptr = m_DescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr;
-		m_Bundle->SetGraphicsRootDescriptorTable(1, offset_handle);
-	#endif
-
-	unsigned int counter = 0;
-	for (unsigned int u = 0; u < count / g_SegmentCount; ++u) {
-		#if USE_CONSTANTS
-			//m_Bundle->SetGraphicsRoot32BitConstants(0, &_transforms[u], 0, 16);
-		#else
-			// Setup constant buffer
-			offset_handle.ptr = m_DescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr + m_DescriptorSize * (u + 1);
-			m_Bundle->SetGraphicsRootDescriptorTable(0, offset_handle);
-		#endif
-
-		// draw the instance
-		#if USE_INDIRECT
-			m_Bundle->ExecuteIndirect(m_CommandSig, g_SegmentCount, m_CommandBuffer, 0, 0, 0);
-		#else
-			m_Bundle->DrawIndexedInstanced(m_IndexCount, g_SegmentCount, 0, 0, 0);
-		#endif
-	}
-	m_Bundle->Close();
-
-	return true;
-}
-
 void UntexturedD3D12Solution::Render(const std::vector<Matrix>& _transforms)
 {
-	if (FAILED(m_CommandAllocator->Reset()))
-		return;
-
 	unsigned int count = _transforms.size();
 
 	// Program
@@ -384,126 +316,97 @@ void UntexturedD3D12Solution::Render(const std::vector<Matrix>& _transforms)
 	Matrix view = matrix_look_at(eye, at, up);
 	for (unsigned int i = 0; i < (unsigned int)count; ++i)
 		m_WorldMatrixBufferData[4*i].m = _transforms[i];
+
 	// setup viewprojection matrix
 	Matrix vp = mProj * view;
 	m_ViewProjectionMatrixBufferData->m = vp;
-	/*
-	{
-		m_GraphicsCommandList->Reset(m_CommandAllocator, 0);
-		m_GraphicsCommandList->CopyBufferRegion(m_WorldMatrixBufferGPU, 0, m_WorldMatrixBuffer, 0, cbvIncrement*total_count, D3D12_COPY_NONE);
-		m_GraphicsCommandList->Close();
-		// Execute Command List
-		g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&m_GraphicsCommandList);
-	}*/
 	
 	// Create Command List first time invoked
-#if !USE_BUNDLE
 	{
-		// Reset command list
-		m_GraphicsCommandList->Reset(m_CommandAllocator, 0);
-
 		// Setup root signature
-		m_GraphicsCommandList->SetGraphicsRootSignature(m_RootSignature);
+		g_CommandList->SetGraphicsRootSignature(m_RootSignature);
 
 		// Setup descriptor heaps
-		m_GraphicsCommandList->SetDescriptorHeaps(&m_DescriptorHeap, 1);
+		//g_CommandList->SetDescriptorHeaps(&m_DescriptorHeap, 1);
 
 		// Setup viewport
 		D3D12_VIEWPORT viewport = { 0, 0, FLOAT(g_ClientWidth), FLOAT(g_ClientHeight), 0.0f, 1.0f };
-		m_GraphicsCommandList->RSSetViewports(1, &viewport);
+		g_CommandList->RSSetViewports(1, &viewport);
 
 		// Setup scissor
 		D3D12_RECT scissorRect = { 0, 0, g_ClientWidth, g_ClientHeight };
-		m_GraphicsCommandList->RSSetScissorRects(1, &scissorRect);
+		g_CommandList->RSSetScissorRects(1, &scissorRect);
 
 		// Set Render Target
-		m_GraphicsCommandList->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
+		g_CommandList->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
 
 		// Setup pipeline state
-		m_GraphicsCommandList->SetPipelineState(m_PipelineState);
+		g_CommandList->SetPipelineState(m_PipelineState);
 
 		// Draw the triangle
-		m_GraphicsCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		m_GraphicsCommandList->SetVertexBuffers(0, &m_VertexBufferView, 1);
-		m_GraphicsCommandList->SetIndexBuffer(&m_IndexBufferView);
+		g_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		g_CommandList->SetVertexBuffers(0, &m_VertexBufferView, 1);
+		g_CommandList->SetIndexBuffer(&m_IndexBufferView);
 
 #if USE_CONSTANTS
-		m_GraphicsCommandList->SetGraphicsRoot32BitConstants(1, &vp, 0, 16);
+		g_CommandList->SetGraphicsRoot32BitConstants(1, &vp, 0, 16);
+#elif USE_CBV_DIRECT
+		g_CommandList->SetGraphicsRootConstantBufferView(1, m_ViewProjectionBuffer->GetGPUVirtualAddress() );
 #else
+		g_CommandList->SetDescriptorHeaps(&m_DescriptorHeap, 1);
 		D3D12_GPU_DESCRIPTOR_HANDLE offset_handle;
 		offset_handle.ptr = m_DescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr;
-		m_GraphicsCommandList->SetGraphicsRootDescriptorTable(1, offset_handle);
+		g_CommandList->SetGraphicsRootDescriptorTable(1, offset_handle);
 #endif
-	
+		
 		unsigned int counter = 0;
 		for (unsigned int u = 0; u < count / g_SegmentCount ; ++u) {
 #if USE_CONSTANTS
-			m_GraphicsCommandList->SetGraphicsRoot32BitConstants(0, &_transforms[u], 0, 16);
+			g_CommandList->SetGraphicsRoot32BitConstants(0, &_transforms[u], 0, 16);
+#elif USE_CBV_DIRECT
+			static const UINT cbvIncrement = (sizeof(MatrixBuffer)*g_SegmentCount + (D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1)) & ~(D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1);
+			g_CommandList->SetGraphicsRootConstantBufferView(0, m_WorldMatrixBuffer->GetGPUVirtualAddress() + cbvIncrement * u);
 #else
 			// Setup constant buffer
+			D3D12_GPU_DESCRIPTOR_HANDLE offset_handle;
 			offset_handle.ptr = m_DescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr + m_DescriptorSize * (u + 1);
-			m_GraphicsCommandList->SetGraphicsRootDescriptorTable(0, offset_handle);
+			g_CommandList->SetGraphicsRootDescriptorTable(0, offset_handle);
 #endif
-			//Matrix identity = matrix_identity();
-			//m_GraphicsCommandList->SetGraphicsRoot32BitConstants(0, &identity, 0, 16);
-			
+
 			// draw the instance
 #if USE_INDIRECT
-			m_GraphicsCommandList->ExecuteIndirect(m_CommandSig, g_SegmentCount, m_CommandBuffer, 0, 0, 0);
+			g_CommandList->ExecuteIndirect(m_CommandSig, g_SegmentCount, m_CommandBuffer, 0, 0, 0);
 #else
-			m_GraphicsCommandList->DrawIndexedInstanced(m_IndexCount, g_SegmentCount, 0, 0, 0);
+			g_CommandList->DrawIndexedInstanced(m_IndexCount, g_SegmentCount, 0, 0, 0);
 #endif
 		}
 	}
-#else
-	{
-		// Reset command list
-		m_GraphicsCommandList->Reset(m_CommandAllocator, 0);
-
-		// Setup root signature
-		m_GraphicsCommandList->SetGraphicsRootSignature(m_RootSignature);
-
-		// Setup descriptor heaps
-		m_GraphicsCommandList->SetDescriptorHeaps(&m_DescriptorHeap, 1);
-
-		// Setup viewport
-		D3D12_VIEWPORT viewport = { 0, 0, FLOAT(g_ClientWidth), FLOAT(g_ClientHeight), 0.0f, 1.0f };
-		m_GraphicsCommandList->RSSetViewports(1, &viewport);
-
-		// Setup scissor
-		D3D12_RECT scissorRect = { 0, 0, g_ClientWidth, g_ClientHeight };
-		m_GraphicsCommandList->RSSetScissorRects(1, &scissorRect);
-
-		// Set Render Target
-		m_GraphicsCommandList->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
-
-		// execute bundle
-		m_GraphicsCommandList->ExecuteBundle(m_Bundle);
-	}
-#endif
-
-	// Close the command list
-	m_GraphicsCommandList->Close();
-
-	// Execute Command List
-	g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&m_GraphicsCommandList);
 }
 
 void UntexturedD3D12Solution::Shutdown()
 {
+	// Make sure everything is flushed out before releasing anything.
+	g_CommandQueue->Signal(g_FinishFence, ++g_finishFenceValue);
+	g_FinishFence->SetEventOnCompletion(g_finishFenceValue, g_finishFenceEvent);
+	WaitForSingleObject(g_finishFenceEvent, INFINITE);
+
 	m_WorldMatrixBufferData = 0;
 	m_ViewProjectionMatrixBufferData = 0;
 
 	m_VertexBuffer.release();
 	m_IndexBuffer.release();
+	m_VertexBufferHeap.release();
 	m_WorldMatrixBuffer.release();
 	m_ViewProjectionBuffer.release();
 	m_DescriptorHeap.release();
 	m_PipelineState.release();
 	m_RootSignature.release();
-	m_VertexBufferHeap.release();
-	m_CommandAllocator.release();
-	m_BundleAllocator.release();
-	m_GraphicsCommandList.release();
+
+	m_UploadBuffer.release();
+	m_DefaultBuffer.release();
+	m_CommandBuffer.release();
+	m_CommandSig.release();
+
 	m_Bundle.release();
+	m_BundleAllocator.release();
 }
