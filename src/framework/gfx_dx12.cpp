@@ -44,7 +44,8 @@ GfxApiDirect3D12::~GfxApiDirect3D12()
 // --------------------------------------------------------------------------------------------------------------------
 bool GfxApiDirect3D12::Init(const std::string& _title, int _x, int _y, int _width, int _height)
 {
-	if (!GfxBaseApi::Init(_title, _x, _y, _width, _height)) {
+	if (!GfxBaseApi::Init(_title, _x, _y, _width, _height)) 
+	{
 		return false;
 	}
 
@@ -57,8 +58,13 @@ bool GfxApiDirect3D12::Init(const std::string& _title, int _x, int _y, int _widt
 	if (FAILED(hr))
 		return false;
 
+	D3D12_CREATE_DEVICE_FLAG flag = D3D12_CREATE_DEVICE_NONE;
+#if _DEBUG
+//	flag |= D3D12_CREATE_DEVICE_DEBUG;
+#endif
+
 	// Create D3D12 Device
-	hr = D3D12CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, D3D12_CREATE_DEVICE_NONE, D3D_FEATURE_LEVEL_11_0, D3D12_SDK_VERSION, __uuidof(ID3D12Device), (void **)&g_D3D12Device);
+	hr = D3D12CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, flag, D3D_FEATURE_LEVEL_11_0, D3D12_SDK_VERSION, __uuidof(ID3D12Device), (void **)&g_D3D12Device);
 	if (FAILED(hr))
 		return false;
 
@@ -122,19 +128,8 @@ void GfxApiDirect3D12::Clear(Vec4 _clearColor, GLfloat _clearDepth)
 	// reset command list
 	g_CommandList->Reset(g_CommandAllocator, 0);
 
-	//AddResourceBarrier(m_CommandList, g_BackBuffer, D3D12_RESOURCE_USAGE_INITIAL, D3D12_RESOURCE_USAGE_RENDER_TARGET);
-
-	D3D12_RESOURCE_BARRIER_DESC barrierDesc =
-	{
-		D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-		{ {
-			g_BackBuffer,
-			0,
-			D3D12_RESOURCE_USAGE_PRESENT,
-			D3D12_RESOURCE_USAGE_RENDER_TARGET,
-		} },
-	};
-	g_CommandList->ResourceBarrier(1, &barrierDesc);
+	// Add resource barrier
+	AddResourceBarrier(g_CommandList, g_BackBuffer, D3D12_RESOURCE_USAGE_PRESENT, D3D12_RESOURCE_USAGE_RENDER_TARGET);
 
 	// Bind render target for drawing
 	g_CommandList->ClearRenderTargetView(g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), &_clearColor.x, 0, 0);
@@ -146,18 +141,8 @@ void GfxApiDirect3D12::Clear(Vec4 _clearColor, GLfloat _clearDepth)
 // --------------------------------------------------------------------------------------------------------------------
 void GfxApiDirect3D12::SwapBuffers()
 {
-	// Create Command List first time invoked
-	D3D12_RESOURCE_BARRIER_DESC barrierDesc =
-	{
-		D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-		{ {
-			g_BackBuffer,
-			0,
-			D3D12_RESOURCE_USAGE_RENDER_TARGET,
-			D3D12_RESOURCE_USAGE_PRESENT,
-		} },
-	};
-	g_CommandList->ResourceBarrier(1, &barrierDesc);
+	// Add resource barrier
+	AddResourceBarrier(g_CommandList, g_BackBuffer, D3D12_RESOURCE_USAGE_RENDER_TARGET, D3D12_RESOURCE_USAGE_PRESENT);
 
 	// Close the command list
 	g_CommandList->Close();
@@ -167,31 +152,31 @@ void GfxApiDirect3D12::SwapBuffers()
 
 	// Present
 	m_SwapChain->Present(0, 0);
-	
-	// swap command buffer RTV
-	g_CurrentBufferId = (g_CurrentBufferId + 1) % 2;
-	m_SwapChain->GetBuffer(g_CurrentBufferId, __uuidof(ID3D12Resource), (void**)&g_BackBuffer);
-	g_D3D12Device->CreateRenderTargetView( g_BackBuffer , 0 , g_HeapRTV->GetCPUDescriptorHandleForHeapStart());
 }
 
 // --------------------------------------------------------------------------------------------------------------------
 bool GfxApiDirect3D12::CreateSwapChain()
 {
+	if (FAILED(CreateDefaultCommandQueue())){
+		return false;
+	}
+
 	// Create Swap Chain
 	DXGI_SWAP_CHAIN_DESC swap_chain_desc;
+	memset(&swap_chain_desc, 0, sizeof(swap_chain_desc));
 	swap_chain_desc.BufferDesc.Width = UINT(g_ClientWidth);
 	swap_chain_desc.BufferDesc.Height = UINT(g_ClientHeight);
 	swap_chain_desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	swap_chain_desc.SampleDesc.Count = 1;
 	swap_chain_desc.SampleDesc.Quality = 0;
 	swap_chain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	swap_chain_desc.BufferCount = 2;
+	swap_chain_desc.BufferCount = 1;
 	swap_chain_desc.OutputWindow = GetHwnd(mWnd);
 	swap_chain_desc.Windowed = TRUE;
-	swap_chain_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+	swap_chain_desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;;
 	swap_chain_desc.Flags = 0;
 
-	if (FAILED(g_dxgi_factory->CreateSwapChain(g_D3D12Device, &swap_chain_desc, &m_SwapChain))) {
+	if (FAILED(g_dxgi_factory->CreateSwapChain(g_CommandQueue, &swap_chain_desc, &m_SwapChain))) {
 		return false;
 	}
 	
@@ -200,10 +185,6 @@ bool GfxApiDirect3D12::CreateSwapChain()
 	}
 	
 	if (FAILED(CreateDepthBuffer())) {
-		return false;
-	}
-
-	if (FAILED(CreateDefaultCommandQueue())){
 		return false;
 	}
 
@@ -220,7 +201,7 @@ HRESULT GfxApiDirect3D12::CreateRenderTarget()
 		return hr;
 
 	// Get Back Buffer
-	hr = m_SwapChain->GetBuffer(g_CurrentBufferId, __uuidof(ID3D12Resource), (void **)&g_BackBuffer);
+	hr = m_SwapChain->GetBuffer(0, __uuidof(ID3D12Resource), (void **)&g_BackBuffer);
 	if (FAILED(hr))
 		return hr;
 

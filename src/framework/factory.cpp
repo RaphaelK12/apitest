@@ -49,6 +49,8 @@
 #	include "solutions\untexturedobjects\d3d12\d3d12solution.h"
 #	include "solutions\untexturedobjects\d3d12\setconstants.h"
 #	include "solutions\untexturedobjects\d3d12\setconstantbufferview.h"
+#	include "solutions\untexturedobjects\d3d12\executeindirect.h"
+#	include "solutions\untexturedobjects\d3d12\multithread.h"
 #endif
 
 // --------------------------------------------------------------------------------------------------------------------
@@ -118,6 +120,8 @@ ProblemFactory::ProblemFactory(bool _skipInit)
 		#if WITH_D3D12
 			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12SetConstants());
 			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12SetConstantBufferView());
+			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12MultiThread());
+			//mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12ExecuteIndirect());
 			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedD3D12Solution());
 		#endif
     } else {

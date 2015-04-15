@@ -43,11 +43,6 @@ bool UntexturedObjectsD3D12SetConstantBufferView::CreatePSO()
 	comptr<ID3DBlob> vsCode = CompileShader(L"cubes_d3d12_naive_vs.hlsl", "vsMain", "vs_5_0");
 	comptr<ID3DBlob> psCode = CompileShader(L"cubes_d3d12_naive_ps.hlsl", "psMain", "ps_5_0");
 
-	// Create Root signature
-	D3D12_DESCRIPTOR_RANGE descRanges[2];
-	descRanges[0].Init(D3D12_DESCRIPTOR_RANGE_CBV, 1, 0);
-	descRanges[1].Init(D3D12_DESCRIPTOR_RANGE_CBV, 1, 1);
-
 	D3D12_ROOT_PARAMETER rootParameters[2];
 	rootParameters[0].InitAsConstantBufferView(0);
 	rootParameters[1].InitAsConstants(16, 1);

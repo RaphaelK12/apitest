@@ -21,7 +21,7 @@ static bool g_UseBundle = false;
 static size_t g_SegmentCount = 1;
 
 #define	USE_CONSTANTS	0
-#define USE_CBV_DIRECT	1
+#define USE_CBV_DIRECT	0
 #define	USE_INDIRECT	0
 
 UntexturedD3D12Solution::UntexturedD3D12Solution():
@@ -46,8 +46,8 @@ bool UntexturedD3D12Solution::Init(const std::vector<UntexturedObjectsProblem::V
 	if (!CreateGeometryBuffer(_vertices, _indices))
 		return false;
 
-	//if (!CreateCommandSignature())
-//		return false;
+	if (!CreateCommandSignature())
+		return false;
 
 	if (!CreateConstantBuffer(_objectCount))
 		return false;
@@ -314,8 +314,13 @@ void UntexturedD3D12Solution::Render(const std::vector<Matrix>& _transforms)
 	dir = normalize(dir);
 	Vec3 eye = at - 250.0f * dir;
 	Matrix view = matrix_look_at(eye, at, up);
-	for (unsigned int i = 0; i < (unsigned int)count; ++i)
-		m_WorldMatrixBufferData[4*i].m = _transforms[i];
+	static bool flag = true;
+	if (flag)
+	{
+		for (unsigned int i = 0; i < (unsigned int)count; ++i)
+			m_WorldMatrixBufferData[4 * i].m = _transforms[i];
+		flag = false;
+	}
 
 	// setup viewprojection matrix
 	Matrix vp = mProj * view;
@@ -360,12 +365,12 @@ void UntexturedD3D12Solution::Render(const std::vector<Matrix>& _transforms)
 #endif
 		
 		unsigned int counter = 0;
-		for (unsigned int u = 0; u < count / g_SegmentCount ; ++u) {
+		for (unsigned int u = 0; u < count; ++u) {
 #if USE_CONSTANTS
 			g_CommandList->SetGraphicsRoot32BitConstants(0, &_transforms[u], 0, 16);
 #elif USE_CBV_DIRECT
 			static const UINT cbvIncrement = (sizeof(MatrixBuffer)*g_SegmentCount + (D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1)) & ~(D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1);
-			g_CommandList->SetGraphicsRootConstantBufferView(0, m_WorldMatrixBuffer->GetGPUVirtualAddress() + cbvIncrement * u);
+			g_CommandList->SetGraphicsRootConstantBufferView(0, m_WorldMatrixBuffer->GetGPUVirtualAddress() + cbvIncrement * u );
 #else
 			// Setup constant buffer
 			D3D12_GPU_DESCRIPTOR_HANDLE offset_handle;
