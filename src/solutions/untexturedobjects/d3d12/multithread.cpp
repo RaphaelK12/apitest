@@ -9,6 +9,7 @@ extern comptr<ID3D12DescriptorHeap>			g_HeapDSV;
 extern comptr<ID3D12Resource>				g_BackBuffer;
 extern comptr<ID3D12CommandQueue>			g_CommandQueue;
 extern comptr<ID3D12GraphicsCommandList>	g_CommandList;
+extern comptr<ID3D12CommandAllocator>		g_CommandAllocator;
 extern int	g_ClientWidth;
 extern int	g_ClientHeight;
 
@@ -32,6 +33,12 @@ bool UntexturedObjectsD3D12MultiThread::Init(const std::vector<UntexturedObjects
 		return false;
 
 	if (!CreateConstantBuffer(_objectCount))
+		return false;
+
+	if (!CreateThreads())
+		return false;
+
+	if (!CreateCommands())
 		return false;
 
 	return true;
@@ -129,25 +136,52 @@ bool UntexturedObjectsD3D12MultiThread::CreateConstantBuffer(size_t count)
 
 	m_ConstantBuffer->Map(0, nullptr, reinterpret_cast<void**>(&m_ConstantBufferData));
 
+	m_ObjectCount = count;
+
+	return true;
+}
+
+bool UntexturedObjectsD3D12MultiThread::CreateCommands()
+{
+	// Create Command List
+	for (int i = 0; i < NUM_EXT_THREAD; ++i)
+	{
+		if (FAILED(g_D3D12Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&m_CommandAllocator[i])))
+			return false;
+
+		g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, m_CommandAllocator[i], 0, __uuidof(ID3D12GraphicsCommandList), (void**)&m_CommandList[i]);
+		m_CommandList[i]->Close();
+	}
+
 	return true;
 }
 
 void UntexturedObjectsD3D12MultiThread::Render(const std::vector<Matrix>& _transforms)
 {
-	unsigned int count = _transforms.size();
-
+	g_CommandList->Close();
+	g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&g_CommandList);
+	
 	// Program
 	Vec3 dir = { -0.5f, -1, 1 };
 	Vec3 at = { 0, 0, 0 };
 	Vec3 up = { 0, 0, 1 };
 	dir = normalize(dir);
 	Vec3 eye = at - 250.0f * dir;
-	for (unsigned int i = 0; i < (unsigned int)count; ++i)
+	for (unsigned int i = 0; i < m_ObjectCount; ++i)
 		m_ConstantBufferData[4 * i].m = _transforms[i];
-	Matrix vp = mProj * matrix_look_at(eye, at, up);
+	m_ViewProjection = mProj * matrix_look_at(eye, at, up);
+	m_Transforms = (Matrix*)_transforms.data();
+
+	// something temporary
+	//console::log("---------------------------Thread %d", 0);
+
+	for (int i = 0; i < NUM_EXT_THREAD; ++i)
+		SetEvent(m_ThreadBeginEvent[i]);
 
 	// Create Command List first time invoked
 	{
+		/*g_CommandList->Reset(g_CommandAllocator, 0);
+
 		// Setup root signature
 		g_CommandList->SetGraphicsRootSignature(m_RootSignature);
 
@@ -170,14 +204,24 @@ void UntexturedObjectsD3D12MultiThread::Render(const std::vector<Matrix>& _trans
 		g_CommandList->SetVertexBuffers(0, &m_VertexBufferView, 1);
 		g_CommandList->SetIndexBuffer(&m_IndexBufferView);
 
-		g_CommandList->SetGraphicsRoot32BitConstants(1, &vp, 0, 16);
+		g_CommandList->SetGraphicsRoot32BitConstants(1, &m_ViewProjection, 0, 16);
 
 		unsigned int counter = 0;
-		for (unsigned int u = 0; u < count ; ++u) {
+		for (unsigned int u = 0; u < m_ObjectCount / NUM_EXT_THREAD; ++u) {
 			g_CommandList->SetGraphicsRootConstantBufferView(0, m_ConstantBuffer->GetGPUVirtualAddress() + D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * u);
 			g_CommandList->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
 		}
+
+		g_CommandList->Close();*/
 	}
+
+	WaitForMultipleObjects(NUM_EXT_THREAD, m_ThreadEndEvent, 1, INFINITE);
+
+	// execute command list
+	g_CommandQueue->ExecuteCommandLists(NUM_EXT_THREAD, (ID3D12CommandList* const*)m_CommandList);
+	
+	// Reset command allocator
+	g_CommandList->Reset(g_CommandAllocator, 0);
 }
 
 void UntexturedObjectsD3D12MultiThread::Shutdown()
@@ -187,6 +231,19 @@ void UntexturedObjectsD3D12MultiThread::Shutdown()
 	g_FinishFence->SetEventOnCompletion(g_finishFenceValue, g_finishFenceEvent);
 	WaitForSingleObject(g_finishFenceEvent, INFINITE);
 
+	m_ThreadEnded = true;
+	for (int i = 0; i < NUM_EXT_THREAD; ++i)
+		SetEvent(m_ThreadBeginEvent[i]);
+	WaitForMultipleObjects(NUM_EXT_THREAD, m_ThreadHandle, 1, INFINITE);
+
+	// Close thread events and thread handles
+	for (int i = 0; i < NUM_EXT_THREAD; i++)
+	{
+		CloseHandle(m_ThreadBeginEvent[i]);
+		CloseHandle(m_ThreadEndEvent[i]);
+		CloseHandle(m_ThreadHandle[i]);
+	}
+
 	m_RootSignature.release();
 	m_PipelineState.release();
 
@@ -195,4 +252,118 @@ void UntexturedObjectsD3D12MultiThread::Shutdown()
 	m_GeometryBufferHeap.release();
 
 	m_ConstantBuffer.release();
+}
+
+bool UntexturedObjectsD3D12MultiThread::CreateThreads()
+{
+	struct PackedData
+	{
+		int		thread_id;
+		UntexturedObjectsD3D12MultiThread*	instance;
+	};
+	struct threadwrapper
+	{
+		static unsigned int WINAPI thunk(LPVOID lpParameter)
+		{
+			PackedData* data = (PackedData*)(lpParameter);
+			while (true)
+			{
+				data->instance->renderMultiThread(data->thread_id);
+			}
+			return 0;
+		}
+	};
+
+	m_ThreadEnded = false;
+
+	static PackedData data[NUM_EXT_THREAD];
+	for (int i = 0; i < NUM_EXT_THREAD; i++)
+	{
+		m_ThreadBeginEvent[i] = CreateEvent(
+			NULL,
+			FALSE,
+			FALSE,
+			NULL);
+
+		m_ThreadEndEvent[i] = CreateEvent(
+			NULL,
+			FALSE,
+			FALSE,
+			NULL);
+
+		data[i].instance = this;
+		data[i].thread_id = i;
+
+		m_ThreadHandle[i] = (HANDLE)_beginthreadex(
+			nullptr,
+			0,
+			threadwrapper::thunk,
+			(LPVOID)&data[i], // Thread ID
+			0,
+			nullptr);
+
+		// failed to create threads
+		if (!m_ThreadBeginEvent || !m_ThreadEndEvent[i] || !m_ThreadHandle[i])
+			return false;
+	}
+
+	return true;
+}
+
+void UntexturedObjectsD3D12MultiThread::renderMultiThread(int tid)
+{
+	// wait for rendering
+	WaitForSingleObject(m_ThreadBeginEvent[tid], INFINITE);
+
+	// end thread if necessary
+	if (m_ThreadEnded)
+		_endthread();
+
+	// something temporary
+	RenderPart(tid, NUM_EXT_THREAD);
+
+	// finish filling command buffer
+	SetEvent(m_ThreadEndEvent[tid]);
+}
+
+void UntexturedObjectsD3D12MultiThread::RenderPart(int pid, int total)
+{
+	// reset command list
+	m_CommandAllocator[pid]->Reset();
+	m_CommandList[pid]->Reset(m_CommandAllocator[pid], 0);
+
+	// Setup root signature
+	m_CommandList[pid]->SetGraphicsRootSignature(m_RootSignature);
+
+	// Setup viewport
+	D3D12_VIEWPORT viewport = { 0, 0, FLOAT(g_ClientWidth), FLOAT(g_ClientHeight), 0.0f, 1.0f };
+	m_CommandList[pid]->RSSetViewports(1, &viewport);
+
+	// Setup scissor
+	D3D12_RECT scissorRect = { 0, 0, g_ClientWidth, g_ClientHeight };
+	m_CommandList[pid]->RSSetScissorRects(1, &scissorRect);
+
+	// Set Render Target
+	m_CommandList[pid]->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
+
+	// Setup pipeline state
+	m_CommandList[pid]->SetPipelineState(m_PipelineState);
+
+	// Draw the triangle
+	m_CommandList[pid]->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	m_CommandList[pid]->SetVertexBuffers(0, &m_VertexBufferView, 1);
+	m_CommandList[pid]->SetIndexBuffer(&m_IndexBufferView);
+
+	// setup view projection matrix
+	m_CommandList[pid]->SetGraphicsRoot32BitConstants(1, &m_ViewProjection, 0, 16);
+
+	size_t start = m_ObjectCount / total * pid;
+	size_t end = start + m_ObjectCount / total;
+	unsigned int counter = 0;
+	for (unsigned int u = start; u < end; ++u) {
+		m_CommandList[pid]->SetGraphicsRootConstantBufferView(0, m_ConstantBuffer->GetGPUVirtualAddress() + D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * u);
+		m_CommandList[pid]->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
+	}
+
+	m_CommandList[pid]->Close();
 }
