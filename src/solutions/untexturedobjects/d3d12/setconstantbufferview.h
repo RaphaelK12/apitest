@@ -43,8 +43,12 @@ private:
 	size_t								m_IndexCount;
 	size_t								m_DescriptorSize;
 
+	comptr<ID3D12CommandAllocator>		m_CommandAllocator;
+	comptr<ID3D12GraphicsCommandList>	m_CommandList;
+
 	bool CreatePSO();
 	bool CreateGeometryBuffer(	const std::vector<UntexturedObjectsProblem::Vertex>& _vertices,
 								const std::vector<UntexturedObjectsProblem::Index>& _indices);
 	bool CreateConstantBuffer(size_t count);
+	bool CreateCommandList();
 };

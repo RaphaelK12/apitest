@@ -30,6 +30,9 @@ public:
 protected:
 	comptr<IDXGISwapChain>				m_SwapChain;
 
+	comptr<ID3D12GraphicsCommandList>	m_BeginCommandList;
+	comptr<ID3D12GraphicsCommandList>	m_EndCommandList;
+
 	// Create Swap Chain
 	bool CreateSwapChain();
 	// Create Render Target

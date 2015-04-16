@@ -8,7 +8,6 @@ extern comptr<ID3D12DescriptorHeap>			g_HeapRTV;
 extern comptr<ID3D12DescriptorHeap>			g_HeapDSV;
 extern comptr<ID3D12Resource>				g_BackBuffer;
 extern comptr<ID3D12CommandQueue>			g_CommandQueue;
-extern comptr<ID3D12GraphicsCommandList>	g_CommandList;
 extern comptr<ID3D12CommandAllocator>		g_CommandAllocator;
 extern int	g_ClientWidth;
 extern int	g_ClientHeight;
@@ -60,39 +59,44 @@ bool UntexturedObjectsD3D12MultiThread::CreatePSO()
 	if (FAILED(hr))
 		return false;
 
-	hr = g_D3D12Device->CreateRootSignature(0, pBlobRootSig->GetBufferPointer(), pBlobRootSig->GetBufferSize(), __uuidof(ID3D12RootSignature), (void **)&m_RootSignature);
-	if (FAILED(hr))
-		return false;
-
-	const D3D12_INPUT_ELEMENT_DESC inputLayout[] =
+	for (int i = 0; i < NUM_EXT_THREAD; ++i)
 	{
-		{ "ObjPos", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_PER_VERTEX_DATA, 0 },
-		{ "Color", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_PER_VERTEX_DATA, 0 },
-	};
-	const UINT numInputLayoutElements = sizeof(inputLayout) / sizeof(inputLayout[0]);
+		hr = g_D3D12Device->CreateRootSignature(0, pBlobRootSig->GetBufferPointer(), pBlobRootSig->GetBufferSize(), __uuidof(ID3D12RootSignature), (void **)&m_RootSignature[i]);
+		if (FAILED(hr))
+			return false;
 
-	// Create Pipeline State Object
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC psod;
-	memset(&psod, 0, sizeof(psod));
-	psod.pRootSignature = m_RootSignature;
-	psod.VS.BytecodeLength = vsCode->GetBufferSize();
-	psod.VS.pShaderBytecode = vsCode->GetBufferPointer();
-	psod.PS.BytecodeLength = psCode->GetBufferSize();
-	psod.PS.pShaderBytecode = psCode->GetBufferPointer();
-	psod.RasterizerState.FillMode = D3D12_FILL_SOLID;
-	psod.RasterizerState.CullMode = D3D12_CULL_NONE;
-	psod.RasterizerState.FrontCounterClockwise = true;
-	psod.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	psod.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-	psod.SampleDesc.Count = 1;
-	psod.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-	psod.NumRenderTargets = 1;
-	psod.SampleMask = UINT_MAX;
-	psod.InputLayout = { inputLayout, numInputLayoutElements };
-	psod.IndexBufferProperties = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
-	psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+		const D3D12_INPUT_ELEMENT_DESC inputLayout[] =
+		{
+			{ "ObjPos", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_PER_VERTEX_DATA, 0 },
+			{ "Color", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_PER_VERTEX_DATA, 0 },
+		};
+		const UINT numInputLayoutElements = sizeof(inputLayout) / sizeof(inputLayout[0]);
 
-	return SUCCEEDED(g_D3D12Device->CreateGraphicsPipelineState(&psod, __uuidof(ID3D12PipelineState), (void**)&m_PipelineState));
+		// Create Pipeline State Object
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC psod;
+		memset(&psod, 0, sizeof(psod));
+		psod.pRootSignature = m_RootSignature[i];
+		psod.VS.BytecodeLength = vsCode->GetBufferSize();
+		psod.VS.pShaderBytecode = vsCode->GetBufferPointer();
+		psod.PS.BytecodeLength = psCode->GetBufferSize();
+		psod.PS.pShaderBytecode = psCode->GetBufferPointer();
+		psod.RasterizerState.FillMode = D3D12_FILL_SOLID;
+		psod.RasterizerState.CullMode = D3D12_CULL_NONE;
+		psod.RasterizerState.FrontCounterClockwise = true;
+		psod.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		psod.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		psod.SampleDesc.Count = 1;
+		psod.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+		psod.NumRenderTargets = 1;
+		psod.SampleMask = UINT_MAX;
+		psod.InputLayout = { inputLayout, numInputLayoutElements };
+		psod.IndexBufferProperties = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
+		psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+
+		if (FAILED(g_D3D12Device->CreateGraphicsPipelineState(&psod, __uuidof(ID3D12PipelineState), (void**)&m_PipelineState[i])))
+			return false;
+	}
+	return true;
 }
 
 bool UntexturedObjectsD3D12MultiThread::CreateGeometryBuffer(const std::vector<UntexturedObjectsProblem::Vertex>& _vertices,
@@ -158,9 +162,6 @@ bool UntexturedObjectsD3D12MultiThread::CreateCommands()
 
 void UntexturedObjectsD3D12MultiThread::Render(const std::vector<Matrix>& _transforms)
 {
-	g_CommandList->Close();
-	g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&g_CommandList);
-	
 	// Program
 	Vec3 dir = { -0.5f, -1, 1 };
 	Vec3 at = { 0, 0, 0 };
@@ -172,56 +173,12 @@ void UntexturedObjectsD3D12MultiThread::Render(const std::vector<Matrix>& _trans
 	m_ViewProjection = mProj * matrix_look_at(eye, at, up);
 	m_Transforms = (Matrix*)_transforms.data();
 
-	// something temporary
-	//console::log("---------------------------Thread %d", 0);
-
 	for (int i = 0; i < NUM_EXT_THREAD; ++i)
 		SetEvent(m_ThreadBeginEvent[i]);
-
-	// Create Command List first time invoked
-	{
-		/*g_CommandList->Reset(g_CommandAllocator, 0);
-
-		// Setup root signature
-		g_CommandList->SetGraphicsRootSignature(m_RootSignature);
-
-		// Setup viewport
-		D3D12_VIEWPORT viewport = { 0, 0, FLOAT(g_ClientWidth), FLOAT(g_ClientHeight), 0.0f, 1.0f };
-		g_CommandList->RSSetViewports(1, &viewport);
-
-		// Setup scissor
-		D3D12_RECT scissorRect = { 0, 0, g_ClientWidth, g_ClientHeight };
-		g_CommandList->RSSetScissorRects(1, &scissorRect);
-
-		// Set Render Target
-		g_CommandList->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
-
-		// Setup pipeline state
-		g_CommandList->SetPipelineState(m_PipelineState);
-
-		// Draw the triangle
-		g_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		g_CommandList->SetVertexBuffers(0, &m_VertexBufferView, 1);
-		g_CommandList->SetIndexBuffer(&m_IndexBufferView);
-
-		g_CommandList->SetGraphicsRoot32BitConstants(1, &m_ViewProjection, 0, 16);
-
-		unsigned int counter = 0;
-		for (unsigned int u = 0; u < m_ObjectCount / NUM_EXT_THREAD; ++u) {
-			g_CommandList->SetGraphicsRootConstantBufferView(0, m_ConstantBuffer->GetGPUVirtualAddress() + D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * u);
-			g_CommandList->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
-		}
-
-		g_CommandList->Close();*/
-	}
-
-	WaitForMultipleObjects(NUM_EXT_THREAD, m_ThreadEndEvent, 1, INFINITE);
+	WaitForMultipleObjects(NUM_EXT_THREAD, m_ThreadEndEvent, TRUE, INFINITE);
 
 	// execute command list
 	g_CommandQueue->ExecuteCommandLists(NUM_EXT_THREAD, (ID3D12CommandList* const*)m_CommandList);
-	
-	// Reset command allocator
-	g_CommandList->Reset(g_CommandAllocator, 0);
 }
 
 void UntexturedObjectsD3D12MultiThread::Shutdown()
@@ -242,10 +199,13 @@ void UntexturedObjectsD3D12MultiThread::Shutdown()
 		CloseHandle(m_ThreadBeginEvent[i]);
 		CloseHandle(m_ThreadEndEvent[i]);
 		CloseHandle(m_ThreadHandle[i]);
-	}
 
-	m_RootSignature.release();
-	m_PipelineState.release();
+		m_RootSignature[i].release();
+		m_PipelineState[i].release();
+
+		m_CommandAllocator[i].release();
+		m_CommandList[i].release();
+	}
 
 	m_VertexBuffer.release();
 	m_IndexBuffer.release();
@@ -317,7 +277,10 @@ void UntexturedObjectsD3D12MultiThread::renderMultiThread(int tid)
 
 	// end thread if necessary
 	if (m_ThreadEnded)
+	{
 		_endthread();
+		return;
+	}
 
 	// something temporary
 	RenderPart(tid, NUM_EXT_THREAD);
@@ -330,10 +293,10 @@ void UntexturedObjectsD3D12MultiThread::RenderPart(int pid, int total)
 {
 	// reset command list
 	m_CommandAllocator[pid]->Reset();
-	m_CommandList[pid]->Reset(m_CommandAllocator[pid], 0);
+	m_CommandList[pid]->Reset(m_CommandAllocator[pid], m_PipelineState[pid]);
 
 	// Setup root signature
-	m_CommandList[pid]->SetGraphicsRootSignature(m_RootSignature);
+	m_CommandList[pid]->SetGraphicsRootSignature(m_RootSignature[pid]);
 
 	// Setup viewport
 	D3D12_VIEWPORT viewport = { 0, 0, FLOAT(g_ClientWidth), FLOAT(g_ClientHeight), 0.0f, 1.0f };
@@ -347,7 +310,7 @@ void UntexturedObjectsD3D12MultiThread::RenderPart(int pid, int total)
 	m_CommandList[pid]->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
 
 	// Setup pipeline state
-	m_CommandList[pid]->SetPipelineState(m_PipelineState);
+	m_CommandList[pid]->SetPipelineState(m_PipelineState[pid]);
 
 	// Draw the triangle
 	m_CommandList[pid]->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);

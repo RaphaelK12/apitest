@@ -54,6 +54,9 @@ private:
 	comptr<ID3D12Resource>				m_CommandBuffer;
 	comptr<ID3D12CommandSignature>		m_CommandSig;
 
+	comptr<ID3D12CommandAllocator>		m_CommandAllocator;
+	comptr<ID3D12GraphicsCommandList>	m_CommandList;
+
 // private method
 	bool	CreateGeometryBuffer(	const std::vector<UntexturedObjectsProblem::Vertex>& _vertices,
 									const std::vector<UntexturedObjectsProblem::Index>& _indices);
@@ -61,4 +64,5 @@ private:
 	bool	CreateConstantBuffer(UINT total_count);
 	bool	CreateCommandAllocator();
 	bool	CreateCommandSignature();
+	bool	CreateCommandList();
 };

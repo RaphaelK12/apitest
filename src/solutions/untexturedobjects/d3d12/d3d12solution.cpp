@@ -8,7 +8,6 @@ extern comptr<ID3D12DescriptorHeap>			g_HeapRTV;
 extern comptr<ID3D12DescriptorHeap>			g_HeapDSV;
 extern comptr<ID3D12Resource>				g_BackBuffer;
 extern comptr<ID3D12CommandQueue>			g_CommandQueue;
-extern comptr<ID3D12GraphicsCommandList>	g_CommandList;
 extern int	g_ClientWidth;
 extern int	g_ClientHeight;
 
@@ -50,6 +49,9 @@ bool UntexturedD3D12Solution::Init(const std::vector<UntexturedObjectsProblem::V
 		return false;
 
 	if (!CreateConstantBuffer(_objectCount))
+		return false;
+
+	if (!CreateCommandList())
 		return false;
 
 	return true;
@@ -305,6 +307,9 @@ bool UntexturedD3D12Solution::CreateCommandSignature()
 
 void UntexturedD3D12Solution::Render(const std::vector<Matrix>& _transforms)
 {
+	if (FAILED(m_CommandAllocator->Reset()))
+		return;
+
 	unsigned int count = _transforms.size();
 
 	// Program
@@ -328,64 +333,71 @@ void UntexturedD3D12Solution::Render(const std::vector<Matrix>& _transforms)
 	
 	// Create Command List first time invoked
 	{
+		// Reset command list
+		m_CommandList->Reset(m_CommandAllocator, 0);
+
 		// Setup root signature
-		g_CommandList->SetGraphicsRootSignature(m_RootSignature);
+		m_CommandList->SetGraphicsRootSignature(m_RootSignature);
 
 		// Setup descriptor heaps
 		//g_CommandList->SetDescriptorHeaps(&m_DescriptorHeap, 1);
 
 		// Setup viewport
 		D3D12_VIEWPORT viewport = { 0, 0, FLOAT(g_ClientWidth), FLOAT(g_ClientHeight), 0.0f, 1.0f };
-		g_CommandList->RSSetViewports(1, &viewport);
+		m_CommandList->RSSetViewports(1, &viewport);
 
 		// Setup scissor
 		D3D12_RECT scissorRect = { 0, 0, g_ClientWidth, g_ClientHeight };
-		g_CommandList->RSSetScissorRects(1, &scissorRect);
+		m_CommandList->RSSetScissorRects(1, &scissorRect);
 
 		// Set Render Target
-		g_CommandList->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
+		m_CommandList->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
 
 		// Setup pipeline state
-		g_CommandList->SetPipelineState(m_PipelineState);
+		m_CommandList->SetPipelineState(m_PipelineState);
 
 		// Draw the triangle
-		g_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		g_CommandList->SetVertexBuffers(0, &m_VertexBufferView, 1);
-		g_CommandList->SetIndexBuffer(&m_IndexBufferView);
+		m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		m_CommandList->SetVertexBuffers(0, &m_VertexBufferView, 1);
+		m_CommandList->SetIndexBuffer(&m_IndexBufferView);
 
 #if USE_CONSTANTS
-		g_CommandList->SetGraphicsRoot32BitConstants(1, &vp, 0, 16);
+		m_CommandList->SetGraphicsRoot32BitConstants(1, &vp, 0, 16);
 #elif USE_CBV_DIRECT
-		g_CommandList->SetGraphicsRootConstantBufferView(1, m_ViewProjectionBuffer->GetGPUVirtualAddress() );
+		m_CommandList->SetGraphicsRootConstantBufferView(1, m_ViewProjectionBuffer->GetGPUVirtualAddress());
 #else
-		g_CommandList->SetDescriptorHeaps(&m_DescriptorHeap, 1);
+		m_CommandList->SetDescriptorHeaps(&m_DescriptorHeap, 1);
 		D3D12_GPU_DESCRIPTOR_HANDLE offset_handle;
 		offset_handle.ptr = m_DescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr;
-		g_CommandList->SetGraphicsRootDescriptorTable(1, offset_handle);
+		m_CommandList->SetGraphicsRootDescriptorTable(1, offset_handle);
 #endif
 		
 		unsigned int counter = 0;
 		for (unsigned int u = 0; u < count; ++u) {
 #if USE_CONSTANTS
-			g_CommandList->SetGraphicsRoot32BitConstants(0, &_transforms[u], 0, 16);
+			m_CommandList->SetGraphicsRoot32BitConstants(0, &_transforms[u], 0, 16);
 #elif USE_CBV_DIRECT
 			static const UINT cbvIncrement = (sizeof(MatrixBuffer)*g_SegmentCount + (D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1)) & ~(D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1);
-			g_CommandList->SetGraphicsRootConstantBufferView(0, m_WorldMatrixBuffer->GetGPUVirtualAddress() + cbvIncrement * u );
+			m_CommandList->SetGraphicsRootConstantBufferView(0, m_WorldMatrixBuffer->GetGPUVirtualAddress() + cbvIncrement * u);
 #else
 			// Setup constant buffer
 			D3D12_GPU_DESCRIPTOR_HANDLE offset_handle;
 			offset_handle.ptr = m_DescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr + m_DescriptorSize * (u + 1);
-			g_CommandList->SetGraphicsRootDescriptorTable(0, offset_handle);
+			m_CommandList->SetGraphicsRootDescriptorTable(0, offset_handle);
 #endif
 
 			// draw the instance
 #if USE_INDIRECT
-			g_CommandList->ExecuteIndirect(m_CommandSig, g_SegmentCount, m_CommandBuffer, 0, 0, 0);
+			m_CommandList->ExecuteIndirect(m_CommandSig, g_SegmentCount, m_CommandBuffer, 0, 0, 0);
 #else
-			g_CommandList->DrawIndexedInstanced(m_IndexCount, g_SegmentCount, 0, 0, 0);
+			m_CommandList->DrawIndexedInstanced(m_IndexCount, g_SegmentCount, 0, 0, 0);
 #endif
 		}
+
+		m_CommandList->Close();
 	}
+
+	g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&m_CommandList);
 }
 
 void UntexturedD3D12Solution::Shutdown()
@@ -414,4 +426,21 @@ void UntexturedD3D12Solution::Shutdown()
 
 	m_Bundle.release();
 	m_BundleAllocator.release();
+
+	m_CommandAllocator.release();
+	m_CommandList.release();
+}
+
+bool UntexturedD3D12Solution::CreateCommandList()
+{
+	// create command queue allocator
+	HRESULT hr = g_D3D12Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&m_CommandAllocator);
+	if (FAILED(hr))
+		return false;
+
+	// Create Command List
+	g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, m_CommandAllocator, 0, __uuidof(ID3D12GraphicsCommandList), (void**)&m_CommandList);
+	m_CommandList->Close();
+
+	return true;
 }

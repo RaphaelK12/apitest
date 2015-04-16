@@ -2,7 +2,7 @@
 
 #include "solutions/untexturedobjectssoln.h"
 
-#define NUM_EXT_THREAD	2
+#define NUM_EXT_THREAD	4
 
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
@@ -30,8 +30,8 @@ private:
 		Matrix m;
 	};
 
-	comptr<ID3D12PipelineState>			m_PipelineState;
-	comptr<ID3D12RootSignature>			m_RootSignature;
+	comptr<ID3D12PipelineState>			m_PipelineState[NUM_EXT_THREAD];
+	comptr<ID3D12RootSignature>			m_RootSignature[NUM_EXT_THREAD];
 
 	comptr<ID3D12Heap>					m_GeometryBufferHeap;
 	comptr<ID3D12Resource>				m_VertexBuffer;

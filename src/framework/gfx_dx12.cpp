@@ -9,7 +9,6 @@ comptr<IDXGIFactory>				g_dxgi_factory;
 comptr<ID3D12Device>				g_D3D12Device;
 comptr<ID3D12CommandQueue>			g_CommandQueue;
 comptr<ID3D12CommandAllocator>		g_CommandAllocator;
-comptr<ID3D12GraphicsCommandList>	g_CommandList;
 comptr<ID3D12DescriptorHeap>		g_HeapRTV;
 comptr<ID3D12DescriptorHeap>		g_HeapDSV;
 comptr<ID3D12Resource>				g_BackBuffer;
@@ -126,29 +125,38 @@ void GfxApiDirect3D12::Clear(Vec4 _clearColor, GLfloat _clearDepth)
 		return;
 
 	// reset command list
-	g_CommandList->Reset(g_CommandAllocator, 0);
+	m_BeginCommandList->Reset(g_CommandAllocator, 0);
 
 	// Add resource barrier
-	AddResourceBarrier(g_CommandList, g_BackBuffer, D3D12_RESOURCE_USAGE_PRESENT, D3D12_RESOURCE_USAGE_RENDER_TARGET);
+	AddResourceBarrier(m_BeginCommandList, g_BackBuffer, D3D12_RESOURCE_USAGE_PRESENT, D3D12_RESOURCE_USAGE_RENDER_TARGET);
 
 	// Bind render target for drawing
-	g_CommandList->ClearRenderTargetView(g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), &_clearColor.x, 0, 0);
+	m_BeginCommandList->ClearRenderTargetView(g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), &_clearColor.x, 0, 0);
 
 	// Clear depth buffer
-	g_CommandList->ClearDepthStencilView(g_HeapDSV->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_DEPTH, 1.0f, 0, 0, 0);
+	m_BeginCommandList->ClearDepthStencilView(g_HeapDSV->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_DEPTH, 1.0f, 0, 0, 0);
+
+	// Close the event list
+	m_BeginCommandList->Close();
+
+	// Execute command
+	g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&m_BeginCommandList);
 }
 
 // --------------------------------------------------------------------------------------------------------------------
 void GfxApiDirect3D12::SwapBuffers()
 {
+	// Reset command list
+	m_EndCommandList->Reset(g_CommandAllocator, 0);
+
 	// Add resource barrier
-	AddResourceBarrier(g_CommandList, g_BackBuffer, D3D12_RESOURCE_USAGE_RENDER_TARGET, D3D12_RESOURCE_USAGE_PRESENT);
+	AddResourceBarrier(m_EndCommandList, g_BackBuffer, D3D12_RESOURCE_USAGE_RENDER_TARGET, D3D12_RESOURCE_USAGE_PRESENT);
 
 	// Close the command list
-	g_CommandList->Close();
+	m_EndCommandList->Close();
 
 	// execute command list
-	g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&g_CommandList);
+	g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&m_EndCommandList);
 
 	// Present
 	m_SwapChain->Present(0, 0);
@@ -173,7 +181,7 @@ bool GfxApiDirect3D12::CreateSwapChain()
 	swap_chain_desc.BufferCount = 1;
 	swap_chain_desc.OutputWindow = GetHwnd(mWnd);
 	swap_chain_desc.Windowed = TRUE;
-	swap_chain_desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;;
+	swap_chain_desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
 	swap_chain_desc.Flags = 0;
 
 	if (FAILED(g_dxgi_factory->CreateSwapChain(g_CommandQueue, &swap_chain_desc, &m_SwapChain))) {
@@ -267,8 +275,11 @@ HRESULT GfxApiDirect3D12::CreateDefaultCommandQueue()
 		return false;
 
 	// Create Command List
-	g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, g_CommandAllocator, 0, __uuidof(ID3D12GraphicsCommandList), (void**)&g_CommandList);
-	g_CommandList->Close();
+	g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, g_CommandAllocator, 0, __uuidof(ID3D12GraphicsCommandList), (void**)&m_BeginCommandList);
+	m_BeginCommandList->Close();
+	// Create Command List
+	g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, g_CommandAllocator, 0, __uuidof(ID3D12GraphicsCommandList), (void**)&m_EndCommandList);
+	m_EndCommandList->Close();
 
 	return S_OK;
 }

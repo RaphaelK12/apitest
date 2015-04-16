@@ -37,6 +37,9 @@ bool UntexturedObjectsD3D12ExecuteIndirect::Init(const std::vector<UntexturedObj
 	if (!CreateCommandSignature())
 		return false;
 
+	if (!CreateCommandList())
+		return false;
+
 	return true;
 }
 
@@ -164,6 +167,9 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreateConstantBuffer(size_t count)
 
 void UntexturedObjectsD3D12ExecuteIndirect::Render(const std::vector<Matrix>& _transforms)
 {
+	if (FAILED(m_CommandAllocator->Reset()))
+		return;
+
 	unsigned int count = _transforms.size();
 
 	// Program
@@ -205,29 +211,32 @@ void UntexturedObjectsD3D12ExecuteIndirect::Render(const std::vector<Matrix>& _t
 
 	// Create Command List first time invoked
 	{
+		// Reset command list
+		m_CommandList->Reset(m_CommandAllocator, 0);
+
 		// Setup root signature
-		g_CommandList->SetGraphicsRootSignature(m_RootSignature);
+		m_CommandList->SetGraphicsRootSignature(m_RootSignature);
 
 		// Setup viewport
 		D3D12_VIEWPORT viewport = { 0, 0, FLOAT(g_ClientWidth), FLOAT(g_ClientHeight), 0.0f, 1.0f };
-		g_CommandList->RSSetViewports(1, &viewport);
+		m_CommandList->RSSetViewports(1, &viewport);
 
 		// Setup scissor
 		D3D12_RECT scissorRect = { 0, 0, g_ClientWidth, g_ClientHeight };
-		g_CommandList->RSSetScissorRects(1, &scissorRect);
+		m_CommandList->RSSetScissorRects(1, &scissorRect);
 
 		// Set Render Target
-		g_CommandList->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
+		m_CommandList->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
 
 		// Setup pipeline state
-		g_CommandList->SetPipelineState(m_PipelineState);
+		m_CommandList->SetPipelineState(m_PipelineState);
 
 		// Draw the triangle
-		g_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		g_CommandList->SetVertexBuffers(0, &m_VertexBufferView, 1);
-		g_CommandList->SetIndexBuffer(&m_IndexBufferView);
+		m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		m_CommandList->SetVertexBuffers(0, &m_VertexBufferView, 1);
+		m_CommandList->SetIndexBuffer(&m_IndexBufferView);
 
-		g_CommandList->SetGraphicsRoot32BitConstants(1, &vp, 0, 16);
+		m_CommandList->SetGraphicsRoot32BitConstants(1, &vp, 0, 16);
 
 		//g_CommandList->ExecuteIndirect(m_CommandSig, count/3, m_CommandBuffer, 0, 0, 0);
 		/*
@@ -236,7 +245,11 @@ void UntexturedObjectsD3D12ExecuteIndirect::Render(const std::vector<Matrix>& _t
 			g_CommandList->SetGraphicsRootConstantBufferView(0, m_ConstantBuffer->GetGPUVirtualAddress() + D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * u);
 			g_CommandList->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
 		}*/
+
+		m_CommandList->Close();
 	}
+
+	g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&m_CommandList);
 }
 
 void UntexturedObjectsD3D12ExecuteIndirect::Shutdown()
@@ -257,4 +270,21 @@ void UntexturedObjectsD3D12ExecuteIndirect::Shutdown()
 	m_GeometryBufferHeap.release();
 
 	m_ConstantBuffer.release();
+
+	m_CommandAllocator.release();
+	m_CommandList.release();
+}
+
+bool UntexturedObjectsD3D12ExecuteIndirect::CreateCommandList()
+{
+	// create command queue allocator
+	HRESULT hr = g_D3D12Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&m_CommandAllocator);
+	if (FAILED(hr))
+		return false;
+
+	// Create Command List
+	g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, m_CommandAllocator, 0, __uuidof(ID3D12GraphicsCommandList), (void**)&m_CommandList);
+	m_CommandList->Close();
+
+	return true;
 }
