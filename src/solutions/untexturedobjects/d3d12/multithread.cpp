@@ -25,14 +25,17 @@ bool UntexturedObjectsD3D12MultiThread::Init(const std::vector<UntexturedObjects
 	const std::vector<UntexturedObjectsProblem::Index>& _indices,
 	size_t _objectCount)
 {
+	m_ObjectCount = _objectCount;
+	m_finishFenceValue = 0;
+
 	if (!CreatePSO())
 		return false;
 
 	if (!CreateGeometryBuffer(_vertices, _indices))
 		return false;
 
-	if (!CreateConstantBuffer(_objectCount))
-		return false;
+//	if (!CreateConstantBuffer(_objectCount))
+	//	return false;
 
 	if (!CreateThreads())
 		return false;
@@ -50,7 +53,8 @@ bool UntexturedObjectsD3D12MultiThread::CreatePSO()
 	comptr<ID3DBlob> psCode = CompileShader(L"cubes_d3d12_naive_ps.hlsl", "psMain", "ps_5_0");
 
 	D3D12_ROOT_PARAMETER rootParameters[2];
-	rootParameters[0].InitAsConstantBufferView(0);
+	//rootParameters[0].InitAsConstantBufferView(0);
+	rootParameters[0].InitAsConstants(16, 0);
 	rootParameters[1].InitAsConstants(16, 1);
 
 	D3D12_ROOT_SIGNATURE rootSig = { 2, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
@@ -122,7 +126,7 @@ bool UntexturedObjectsD3D12MultiThread::CreateGeometryBuffer(const std::vector<U
 
 	return true;
 }
-
+/*
 bool UntexturedObjectsD3D12MultiThread::CreateConstantBuffer(size_t count)
 {
 	// Create a (large) constant buffer
@@ -143,7 +147,7 @@ bool UntexturedObjectsD3D12MultiThread::CreateConstantBuffer(size_t count)
 	m_ObjectCount = count;
 
 	return true;
-}
+}*/
 
 bool UntexturedObjectsD3D12MultiThread::CreateCommands()
 {
@@ -168,10 +172,12 @@ void UntexturedObjectsD3D12MultiThread::Render(const std::vector<Matrix>& _trans
 	Vec3 up = { 0, 0, 1 };
 	dir = normalize(dir);
 	Vec3 eye = at - 250.0f * dir;
+	/*
 	for (unsigned int i = 0; i < m_ObjectCount; ++i)
-		m_ConstantBufferData[4 * i].m = _transforms[i];
+		m_ConstantBufferData[4 * i].m = _transforms[i];*/
+
 	m_ViewProjection = mProj * matrix_look_at(eye, at, up);
-	m_Transforms = (Matrix*)_transforms.data();
+	m_Transforms = &_transforms;
 
 	for (int i = 0; i < NUM_EXT_THREAD; ++i)
 		SetEvent(m_ThreadBeginEvent[i]);
@@ -211,7 +217,7 @@ void UntexturedObjectsD3D12MultiThread::Shutdown()
 	m_IndexBuffer.release();
 	m_GeometryBufferHeap.release();
 
-	m_ConstantBuffer.release();
+//	m_ConstantBuffer.release();
 }
 
 bool UntexturedObjectsD3D12MultiThread::CreateThreads()
@@ -293,8 +299,8 @@ void UntexturedObjectsD3D12MultiThread::RenderPart(int pid, int total)
 {
 	// reset command list
 	m_CommandAllocator[pid]->Reset();
-	m_CommandList[pid]->Reset(m_CommandAllocator[pid], m_PipelineState[pid]);
-
+	m_CommandList[pid]->Reset(m_CommandAllocator[pid], 0);
+	
 	// Setup root signature
 	m_CommandList[pid]->SetGraphicsRootSignature(m_RootSignature[pid]);
 
@@ -308,25 +314,26 @@ void UntexturedObjectsD3D12MultiThread::RenderPart(int pid, int total)
 
 	// Set Render Target
 	m_CommandList[pid]->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
-
-	// Setup pipeline state
-	m_CommandList[pid]->SetPipelineState(m_PipelineState[pid]);
-
+	
 	// Draw the triangle
 	m_CommandList[pid]->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	m_CommandList[pid]->SetVertexBuffers(0, &m_VertexBufferView, 1);
 	m_CommandList[pid]->SetIndexBuffer(&m_IndexBufferView);
 
+	m_CommandList[pid]->SetPipelineState(m_PipelineState[pid]);
+
 	// setup view projection matrix
 	m_CommandList[pid]->SetGraphicsRoot32BitConstants(1, &m_ViewProjection, 0, 16);
+	
 
 	size_t start = m_ObjectCount / total * pid;
 	size_t end = start + m_ObjectCount / total;
 	unsigned int counter = 0;
 	for (unsigned int u = start; u < end; ++u) {
-		m_CommandList[pid]->SetGraphicsRootConstantBufferView(0, m_ConstantBuffer->GetGPUVirtualAddress() + D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * u);
+		//m_CommandList[pid]->SetGraphicsRootConstantBufferView(0, m_ConstantBuffer->GetGPUVirtualAddress() + D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * 0);
+		m_CommandList[pid]->SetGraphicsRoot32BitConstants(0, &((*m_Transforms)[u]), 0, 16);
 		m_CommandList[pid]->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
 	}
-
+	
 	m_CommandList[pid]->Close();
 }

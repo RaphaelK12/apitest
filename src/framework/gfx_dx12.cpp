@@ -22,8 +22,6 @@ comptr<ID3D12Fence> g_FinishFence;
 UINT64 g_finishFenceValue;
 HANDLE g_finishFenceEvent;
 
-static int	g_CurrentBufferId = 0;
-
 GfxBaseApi *CreateGfxDirect3D12() { return new GfxApiDirect3D12; }
 
 static HWND GetHwnd(SDL_Window* _wnd);
@@ -63,7 +61,7 @@ bool GfxApiDirect3D12::Init(const std::string& _title, int _x, int _y, int _widt
 #endif
 
 	// Create D3D12 Device
-	hr = D3D12CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, flag, D3D_FEATURE_LEVEL_11_0, D3D12_SDK_VERSION, __uuidof(ID3D12Device), (void **)&g_D3D12Device);
+	hr = D3D12CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, flag, D3D_FEATURE_LEVEL_9_1, D3D12_SDK_VERSION, __uuidof(ID3D12Device), (void **)&g_D3D12Device);
 	if (FAILED(hr))
 		return false;
 
@@ -170,6 +168,7 @@ bool GfxApiDirect3D12::CreateSwapChain()
 	}
 
 	// Create Swap Chain
+	
 	DXGI_SWAP_CHAIN_DESC swap_chain_desc;
 	memset(&swap_chain_desc, 0, sizeof(swap_chain_desc));
 	swap_chain_desc.BufferDesc.Width = UINT(g_ClientWidth);
@@ -187,7 +186,7 @@ bool GfxApiDirect3D12::CreateSwapChain()
 	if (FAILED(g_dxgi_factory->CreateSwapChain(g_CommandQueue, &swap_chain_desc, &m_SwapChain))) {
 		return false;
 	}
-	
+
 	if (FAILED(CreateRenderTarget())) {
 		return false;
 	}

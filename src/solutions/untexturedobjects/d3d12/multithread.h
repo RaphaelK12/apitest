@@ -2,7 +2,7 @@
 
 #include "solutions/untexturedobjectssoln.h"
 
-#define NUM_EXT_THREAD	4
+#define NUM_EXT_THREAD	8
 
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
@@ -39,11 +39,11 @@ private:
 	D3D12_VERTEX_BUFFER_VIEW			m_VertexBufferView;
 	D3D12_INDEX_BUFFER_VIEW				m_IndexBufferView;
 
-	comptr<ID3D12Resource>				m_ConstantBuffer;
-	MatrixBuffer*						m_ConstantBufferData;
+//	comptr<ID3D12Resource>				m_ConstantBuffer;
+//	MatrixBuffer*						m_ConstantBufferData;
 
 	Matrix								m_ViewProjection;
-	Matrix*								m_Transforms;
+	const std::vector<Matrix>*			m_Transforms;
 
 	size_t								m_ObjectCount;
 	size_t								m_IndexCount;
@@ -56,10 +56,12 @@ private:
 	comptr<ID3D12GraphicsCommandList>	m_CommandList[NUM_EXT_THREAD];
 	bool								m_ThreadEnded;
 
+	size_t								m_finishFenceValue;
+
 	bool CreatePSO();
 	bool CreateGeometryBuffer(	const std::vector<UntexturedObjectsProblem::Vertex>& _vertices,
 								const std::vector<UntexturedObjectsProblem::Index>& _indices);
-	bool CreateConstantBuffer(size_t count);
+//	bool CreateConstantBuffer(size_t count);
 	bool CreateThreads();
 	bool CreateCommands();
 
