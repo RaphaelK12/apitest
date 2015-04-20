@@ -27,15 +27,13 @@ bool UntexturedObjectsD3D12MultiThread::Init(const std::vector<UntexturedObjects
 {
 	m_ObjectCount = _objectCount;
 	m_finishFenceValue = 0;
+	m_ContextId = 0;
 
 	if (!CreatePSO())
 		return false;
 
 	if (!CreateGeometryBuffer(_vertices, _indices))
 		return false;
-
-//	if (!CreateConstantBuffer(_objectCount))
-	//	return false;
 
 	if (!CreateThreads())
 		return false;
@@ -52,19 +50,18 @@ bool UntexturedObjectsD3D12MultiThread::CreatePSO()
 	comptr<ID3DBlob> vsCode = CompileShader(L"cubes_d3d12_naive_vs.hlsl", "vsMain", "vs_5_0");
 	comptr<ID3DBlob> psCode = CompileShader(L"cubes_d3d12_naive_ps.hlsl", "psMain", "ps_5_0");
 
-	D3D12_ROOT_PARAMETER rootParameters[2];
-	//rootParameters[0].InitAsConstantBufferView(0);
-	rootParameters[0].InitAsConstants(16, 0);
-	rootParameters[1].InitAsConstants(16, 1);
-
-	D3D12_ROOT_SIGNATURE rootSig = { 2, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
-	ID3DBlob* pBlobRootSig, *pBlobErrors;
-	HRESULT hr = (D3D12SerializeRootSignature(&rootSig, D3D_ROOT_SIGNATURE_V1, &pBlobRootSig, &pBlobErrors));
-	if (FAILED(hr))
-		return false;
-
 	for (int i = 0; i < NUM_EXT_THREAD; ++i)
 	{
+		D3D12_ROOT_PARAMETER rootParameters[2];
+		rootParameters[0].InitAsConstants(16, 0);
+		rootParameters[1].InitAsConstants(16, 1);
+
+		D3D12_ROOT_SIGNATURE rootSig = { 2, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
+		ID3DBlob* pBlobRootSig, *pBlobErrors;
+		HRESULT hr = (D3D12SerializeRootSignature(&rootSig, D3D_ROOT_SIGNATURE_V1, &pBlobRootSig, &pBlobErrors));
+		if (FAILED(hr))
+			return false;
+
 		hr = g_D3D12Device->CreateRootSignature(0, pBlobRootSig->GetBufferPointer(), pBlobRootSig->GetBufferSize(), __uuidof(ID3D12RootSignature), (void **)&m_RootSignature[i]);
 		if (FAILED(hr))
 			return false;
@@ -100,13 +97,14 @@ bool UntexturedObjectsD3D12MultiThread::CreatePSO()
 		if (FAILED(g_D3D12Device->CreateGraphicsPipelineState(&psod, __uuidof(ID3D12PipelineState), (void**)&m_PipelineState[i])))
 			return false;
 	}
+
 	return true;
 }
 
 bool UntexturedObjectsD3D12MultiThread::CreateGeometryBuffer(const std::vector<UntexturedObjectsProblem::Vertex>& _vertices,
 																const std::vector<UntexturedObjectsProblem::Index>& _indices)
 {
-	const size_t size = 65536 * 4;
+	const size_t size = 65536 * 2;
 
 	if (FAILED(g_D3D12Device->CreateHeap(
 		&CD3D12_HEAP_DESC(size, D3D12_HEAP_TYPE_UPLOAD, 0, D3D12_HEAP_MISC_DENY_TEXTURES),
@@ -126,39 +124,20 @@ bool UntexturedObjectsD3D12MultiThread::CreateGeometryBuffer(const std::vector<U
 
 	return true;
 }
-/*
-bool UntexturedObjectsD3D12MultiThread::CreateConstantBuffer(size_t count)
-{
-	// Create a (large) constant buffer
-	if (FAILED(g_D3D12Device->CreateCommittedResource(
-		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-		D3D12_HEAP_MISC_NONE,
-		&CD3D12_RESOURCE_DESC::Buffer(count * D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT),
-		D3D12_RESOURCE_USAGE_GENERIC_READ,
-		nullptr,
-		__uuidof(ID3D12Resource),
-		reinterpret_cast<void**>(&m_ConstantBuffer))))
-	{
-		return false;
-	}
-
-	m_ConstantBuffer->Map(0, nullptr, reinterpret_cast<void**>(&m_ConstantBufferData));
-
-	m_ObjectCount = count;
-
-	return true;
-}*/
 
 bool UntexturedObjectsD3D12MultiThread::CreateCommands()
 {
 	// Create Command List
 	for (int i = 0; i < NUM_EXT_THREAD; ++i)
 	{
-		if (FAILED(g_D3D12Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&m_CommandAllocator[i])))
-			return false;
+		for (int k = 0; k < NUM_COMMANDLIST; ++k)
+		{
+			if (FAILED(g_D3D12Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&m_CommandAllocator[k][i])))
+				return false;
 
-		g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, m_CommandAllocator[i], 0, __uuidof(ID3D12GraphicsCommandList), (void**)&m_CommandList[i]);
-		m_CommandList[i]->Close();
+			g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, m_CommandAllocator[k][i], 0, __uuidof(ID3D12GraphicsCommandList), (void**)&m_CommandList[k][i]);
+			m_CommandList[k][i]->Close();
+		}
 	}
 
 	return true;
@@ -172,10 +151,7 @@ void UntexturedObjectsD3D12MultiThread::Render(const std::vector<Matrix>& _trans
 	Vec3 up = { 0, 0, 1 };
 	dir = normalize(dir);
 	Vec3 eye = at - 250.0f * dir;
-	/*
-	for (unsigned int i = 0; i < m_ObjectCount; ++i)
-		m_ConstantBufferData[4 * i].m = _transforms[i];*/
-
+	
 	m_ViewProjection = mProj * matrix_look_at(eye, at, up);
 	m_Transforms = &_transforms;
 
@@ -184,7 +160,10 @@ void UntexturedObjectsD3D12MultiThread::Render(const std::vector<Matrix>& _trans
 	WaitForMultipleObjects(NUM_EXT_THREAD, m_ThreadEndEvent, TRUE, INFINITE);
 
 	// execute command list
-	g_CommandQueue->ExecuteCommandLists(NUM_EXT_THREAD, (ID3D12CommandList* const*)m_CommandList);
+	g_CommandQueue->ExecuteCommandLists(NUM_EXT_THREAD, (ID3D12CommandList* const*)m_CommandList[m_ContextId]);
+
+	// switch to next context id
+	m_ContextId = (m_ContextId + 1) % NUM_COMMANDLIST;
 }
 
 void UntexturedObjectsD3D12MultiThread::Shutdown()
@@ -199,6 +178,10 @@ void UntexturedObjectsD3D12MultiThread::Shutdown()
 		SetEvent(m_ThreadBeginEvent[i]);
 	WaitForMultipleObjects(NUM_EXT_THREAD, m_ThreadHandle, 1, INFINITE);
 
+	m_VertexBuffer.release();
+	m_IndexBuffer.release();
+	m_GeometryBufferHeap.release();
+
 	// Close thread events and thread handles
 	for (int i = 0; i < NUM_EXT_THREAD; i++)
 	{
@@ -209,15 +192,12 @@ void UntexturedObjectsD3D12MultiThread::Shutdown()
 		m_RootSignature[i].release();
 		m_PipelineState[i].release();
 
-		m_CommandAllocator[i].release();
-		m_CommandList[i].release();
+		for (int k = 0; k < NUM_COMMANDLIST; k++)
+		{
+			m_CommandAllocator[k][i].release();
+			m_CommandList[k][i].release();
+		}
 	}
-
-	m_VertexBuffer.release();
-	m_IndexBuffer.release();
-	m_GeometryBufferHeap.release();
-
-//	m_ConstantBuffer.release();
 }
 
 bool UntexturedObjectsD3D12MultiThread::CreateThreads()
@@ -298,42 +278,40 @@ void UntexturedObjectsD3D12MultiThread::renderMultiThread(int tid)
 void UntexturedObjectsD3D12MultiThread::RenderPart(int pid, int total)
 {
 	// reset command list
-	m_CommandAllocator[pid]->Reset();
-	m_CommandList[pid]->Reset(m_CommandAllocator[pid], 0);
+	m_CommandAllocator[m_ContextId][pid]->Reset();
+	m_CommandList[m_ContextId][pid]->Reset(m_CommandAllocator[m_ContextId][pid], 0);
 	
 	// Setup root signature
-	m_CommandList[pid]->SetGraphicsRootSignature(m_RootSignature[pid]);
+	m_CommandList[m_ContextId][pid]->SetGraphicsRootSignature(m_RootSignature[pid]);
 
 	// Setup viewport
 	D3D12_VIEWPORT viewport = { 0, 0, FLOAT(g_ClientWidth), FLOAT(g_ClientHeight), 0.0f, 1.0f };
-	m_CommandList[pid]->RSSetViewports(1, &viewport);
+	m_CommandList[m_ContextId][pid]->RSSetViewports(1, &viewport);
 
 	// Setup scissor
 	D3D12_RECT scissorRect = { 0, 0, g_ClientWidth, g_ClientHeight };
-	m_CommandList[pid]->RSSetScissorRects(1, &scissorRect);
+	m_CommandList[m_ContextId][pid]->RSSetScissorRects(1, &scissorRect);
 
 	// Set Render Target
-	m_CommandList[pid]->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
+	m_CommandList[m_ContextId][pid]->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
 	
 	// Draw the triangle
-	m_CommandList[pid]->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	m_CommandList[pid]->SetVertexBuffers(0, &m_VertexBufferView, 1);
-	m_CommandList[pid]->SetIndexBuffer(&m_IndexBufferView);
+	m_CommandList[m_ContextId][pid]->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	m_CommandList[m_ContextId][pid]->SetVertexBuffers(0, &m_VertexBufferView, 1);
+	m_CommandList[m_ContextId][pid]->SetIndexBuffer(&m_IndexBufferView);
 
-	m_CommandList[pid]->SetPipelineState(m_PipelineState[pid]);
+	m_CommandList[m_ContextId][pid]->SetPipelineState(m_PipelineState[pid]);
 
 	// setup view projection matrix
-	m_CommandList[pid]->SetGraphicsRoot32BitConstants(1, &m_ViewProjection, 0, 16);
+	m_CommandList[m_ContextId][pid]->SetGraphicsRoot32BitConstants(1, &m_ViewProjection, 0, 16);
 	
-
 	size_t start = m_ObjectCount / total * pid;
 	size_t end = start + m_ObjectCount / total;
 	unsigned int counter = 0;
 	for (unsigned int u = start; u < end; ++u) {
-		//m_CommandList[pid]->SetGraphicsRootConstantBufferView(0, m_ConstantBuffer->GetGPUVirtualAddress() + D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * 0);
-		m_CommandList[pid]->SetGraphicsRoot32BitConstants(0, &((*m_Transforms)[u]), 0, 16);
-		m_CommandList[pid]->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
+		m_CommandList[m_ContextId][pid]->SetGraphicsRoot32BitConstants(0, &((*m_Transforms)[u]), 0, 16);
+		m_CommandList[m_ContextId][pid]->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
 	}
 	
-	m_CommandList[pid]->Close();
+	m_CommandList[m_ContextId][pid]->Close();
 }
