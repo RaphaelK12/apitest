@@ -123,8 +123,7 @@ endif( apitest_WITH_D3D11 )
 if( apitest_WITH_D3D12 )
 	set( SRCS ${SRCS} 
 		framework/gfx_dx12.cpp
-
-		solutions/untexturedobjects/d3d12/d3d12solution.cpp
+		
 		solutions/untexturedobjects/d3d12/setconstants.cpp
 		solutions/untexturedobjects/d3d12/setconstantbufferview.cpp
 		solutions/untexturedobjects/d3d12/executeindirect.cpp
@@ -351,10 +350,6 @@ source_group( "Solutions\\UntexturedObjects" FILES
 )
 
 if( apitest_WITH_D3D12 )
-source_group( "Solutions\\UntexturedObjects\\D3D12\\D3D12Solution" FILES 
-	solutions/untexturedobjects/d3d12/D3D12Solution.cpp
-	solutions/untexturedobjects/d3d12/D3D12Solution.h
-)
 source_group( "Solutions\\UntexturedObjects\\D3D12\\SetConstants" FILES 
 	solutions/untexturedobjects/d3d12/setconstants.cpp
 	solutions/untexturedobjects/d3d12/setconstants.h

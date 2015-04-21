@@ -3,7 +3,6 @@
 #include "solutions/untexturedobjectssoln.h"
 
 #define NUM_EXT_THREAD	8
-#define NUM_COMMANDLIST	3
 
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
@@ -31,8 +30,8 @@ private:
 		Matrix m;
 	};
 
-	comptr<ID3D12PipelineState>			m_PipelineState[NUM_EXT_THREAD];
-	comptr<ID3D12RootSignature>			m_RootSignature[NUM_EXT_THREAD];
+	comptr<ID3D12PipelineState>			m_PipelineState;
+	comptr<ID3D12RootSignature>			m_RootSignature;
 
 	comptr<ID3D12Heap>					m_GeometryBufferHeap;
 	comptr<ID3D12Resource>				m_VertexBuffer;
@@ -50,13 +49,13 @@ private:
 	HANDLE								m_ThreadHandle[NUM_EXT_THREAD];
 	HANDLE								m_ThreadBeginEvent[NUM_EXT_THREAD];
 	HANDLE								m_ThreadEndEvent[NUM_EXT_THREAD];
-	comptr<ID3D12CommandAllocator>		m_CommandAllocator[NUM_COMMANDLIST][NUM_EXT_THREAD];
-	comptr<ID3D12GraphicsCommandList>	m_CommandList[NUM_COMMANDLIST][NUM_EXT_THREAD];
+	comptr<ID3D12CommandAllocator>		m_CommandAllocator[NUM_ACCUMULATED_FRAMES][NUM_EXT_THREAD];
+	comptr<ID3D12GraphicsCommandList>	m_CommandList[NUM_ACCUMULATED_FRAMES][NUM_EXT_THREAD];
 	bool								m_ThreadEnded;
 
 	int									m_ContextId;
 
-	size_t								m_finishFenceValue;
+	UINT64								m_curFenceValue[NUM_ACCUMULATED_FRAMES];
 
 	bool CreatePSO();
 	bool CreateGeometryBuffer(	const std::vector<UntexturedObjectsProblem::Vertex>& _vertices,

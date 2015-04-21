@@ -20,7 +20,6 @@ int		g_ClientHeight;
 // Finish fence
 comptr<ID3D12Fence> g_FinishFence;
 UINT64 g_finishFenceValue;
-HANDLE g_finishFenceEvent;
 
 GfxBaseApi *CreateGfxDirect3D12() { return new GfxApiDirect3D12; }
 
@@ -73,7 +72,6 @@ bool GfxApiDirect3D12::Init(const std::string& _title, int _x, int _y, int _widt
 	hr = (g_D3D12Device->CreateFence(g_finishFenceValue, D3D12_FENCE_MISC_NONE, __uuidof(ID3D12Fence), reinterpret_cast<void**>(&g_FinishFence)));
 	if (FAILED(hr))
 		return false;
-	g_finishFenceEvent = CreateEvent(nullptr, FALSE, FALSE, "Finish fence event");
 
 	return true;
 }

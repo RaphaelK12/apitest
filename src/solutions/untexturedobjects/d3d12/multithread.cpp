@@ -15,7 +15,6 @@ extern int	g_ClientHeight;
 // Finish fence
 extern comptr<ID3D12Fence> g_FinishFence;
 extern UINT64 g_finishFenceValue;
-extern HANDLE g_finishFenceEvent;
 
 UntexturedObjectsD3D12MultiThread::UntexturedObjectsD3D12MultiThread()
 {
@@ -26,7 +25,8 @@ bool UntexturedObjectsD3D12MultiThread::Init(const std::vector<UntexturedObjects
 	size_t _objectCount)
 {
 	m_ObjectCount = _objectCount;
-	m_finishFenceValue = 0;
+	for (size_t i = 0; i < NUM_ACCUMULATED_FRAMES;++i)
+		m_curFenceValue[i] = 0;
 	m_ContextId = 0;
 
 	if (!CreatePSO())
@@ -50,54 +50,51 @@ bool UntexturedObjectsD3D12MultiThread::CreatePSO()
 	comptr<ID3DBlob> vsCode = CompileShader(L"cubes_d3d12_naive_vs.hlsl", "vsMain", "vs_5_0");
 	comptr<ID3DBlob> psCode = CompileShader(L"cubes_d3d12_naive_ps.hlsl", "psMain", "ps_5_0");
 
-	for (int i = 0; i < NUM_EXT_THREAD; ++i)
+	D3D12_ROOT_PARAMETER rootParameters[2];
+	rootParameters[0].InitAsConstants(16, 0);
+	rootParameters[1].InitAsConstants(16, 1);
+
+	D3D12_ROOT_SIGNATURE rootSig = { 2, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
+	ID3DBlob* pBlobRootSig, *pBlobErrors;
+	HRESULT hr = (D3D12SerializeRootSignature(&rootSig, D3D_ROOT_SIGNATURE_V1, &pBlobRootSig, &pBlobErrors));
+	if (FAILED(hr))
+		return false;
+
+	hr = g_D3D12Device->CreateRootSignature(0, pBlobRootSig->GetBufferPointer(), pBlobRootSig->GetBufferSize(), __uuidof(ID3D12RootSignature), (void **)&m_RootSignature);
+	if (FAILED(hr))
+		return false;
+
+	const D3D12_INPUT_ELEMENT_DESC inputLayout[] =
 	{
-		D3D12_ROOT_PARAMETER rootParameters[2];
-		rootParameters[0].InitAsConstants(16, 0);
-		rootParameters[1].InitAsConstants(16, 1);
+		{ "ObjPos", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_PER_VERTEX_DATA, 0 },
+		{ "Color", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_PER_VERTEX_DATA, 0 },
+	};
+	const UINT numInputLayoutElements = sizeof(inputLayout) / sizeof(inputLayout[0]);
 
-		D3D12_ROOT_SIGNATURE rootSig = { 2, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
-		ID3DBlob* pBlobRootSig, *pBlobErrors;
-		HRESULT hr = (D3D12SerializeRootSignature(&rootSig, D3D_ROOT_SIGNATURE_V1, &pBlobRootSig, &pBlobErrors));
-		if (FAILED(hr))
-			return false;
+	// Create Pipeline State Object
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC psod;
+	memset(&psod, 0, sizeof(psod));
+	psod.pRootSignature = m_RootSignature;
+	psod.VS.BytecodeLength = vsCode->GetBufferSize();
+	psod.VS.pShaderBytecode = vsCode->GetBufferPointer();
+	psod.PS.BytecodeLength = psCode->GetBufferSize();
+	psod.PS.pShaderBytecode = psCode->GetBufferPointer();
+	psod.RasterizerState.FillMode = D3D12_FILL_SOLID;
+	psod.RasterizerState.CullMode = D3D12_CULL_NONE;
+	psod.RasterizerState.FrontCounterClockwise = true;
+	psod.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+	psod.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	psod.SampleDesc.Count = 1;
+	psod.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+	psod.NumRenderTargets = 1;
+	psod.SampleMask = UINT_MAX;
+	psod.InputLayout = { inputLayout, numInputLayoutElements };
+	psod.IndexBufferProperties = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
+	psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
 
-		hr = g_D3D12Device->CreateRootSignature(0, pBlobRootSig->GetBufferPointer(), pBlobRootSig->GetBufferSize(), __uuidof(ID3D12RootSignature), (void **)&m_RootSignature[i]);
-		if (FAILED(hr))
-			return false;
-
-		const D3D12_INPUT_ELEMENT_DESC inputLayout[] =
-		{
-			{ "ObjPos", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_PER_VERTEX_DATA, 0 },
-			{ "Color", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_PER_VERTEX_DATA, 0 },
-		};
-		const UINT numInputLayoutElements = sizeof(inputLayout) / sizeof(inputLayout[0]);
-
-		// Create Pipeline State Object
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC psod;
-		memset(&psod, 0, sizeof(psod));
-		psod.pRootSignature = m_RootSignature[i];
-		psod.VS.BytecodeLength = vsCode->GetBufferSize();
-		psod.VS.pShaderBytecode = vsCode->GetBufferPointer();
-		psod.PS.BytecodeLength = psCode->GetBufferSize();
-		psod.PS.pShaderBytecode = psCode->GetBufferPointer();
-		psod.RasterizerState.FillMode = D3D12_FILL_SOLID;
-		psod.RasterizerState.CullMode = D3D12_CULL_NONE;
-		psod.RasterizerState.FrontCounterClockwise = true;
-		psod.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		psod.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-		psod.SampleDesc.Count = 1;
-		psod.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-		psod.NumRenderTargets = 1;
-		psod.SampleMask = UINT_MAX;
-		psod.InputLayout = { inputLayout, numInputLayoutElements };
-		psod.IndexBufferProperties = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
-		psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
-
-		if (FAILED(g_D3D12Device->CreateGraphicsPipelineState(&psod, __uuidof(ID3D12PipelineState), (void**)&m_PipelineState[i])))
-			return false;
-	}
-
+	if (FAILED(g_D3D12Device->CreateGraphicsPipelineState(&psod, __uuidof(ID3D12PipelineState), (void**)&m_PipelineState)))
+		return false;
+	
 	return true;
 }
 
@@ -130,7 +127,7 @@ bool UntexturedObjectsD3D12MultiThread::CreateCommands()
 	// Create Command List
 	for (int i = 0; i < NUM_EXT_THREAD; ++i)
 	{
-		for (int k = 0; k < NUM_COMMANDLIST; ++k)
+		for (int k = 0; k < NUM_ACCUMULATED_FRAMES; ++k)
 		{
 			if (FAILED(g_D3D12Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&m_CommandAllocator[k][i])))
 				return false;
@@ -145,6 +142,16 @@ bool UntexturedObjectsD3D12MultiThread::CreateCommands()
 
 void UntexturedObjectsD3D12MultiThread::Render(const std::vector<Matrix>& _transforms)
 {
+	// Check out fence
+	const UINT64 lastCompletedFence = g_FinishFence->GetCompletedValue();
+	if (m_curFenceValue[m_ContextId] > lastCompletedFence)
+	{
+		HANDLE handleEvent = CreateEventEx(nullptr, FALSE, FALSE, EVENT_ALL_ACCESS);
+		g_FinishFence->SetEventOnCompletion(m_curFenceValue[m_ContextId], handleEvent);
+		WaitForSingleObject(handleEvent, INFINITE);
+		CloseHandle(handleEvent);
+	}
+
 	// Program
 	Vec3 dir = { -0.5f, -1, 1 };
 	Vec3 at = { 0, 0, 0 };
@@ -162,16 +169,22 @@ void UntexturedObjectsD3D12MultiThread::Render(const std::vector<Matrix>& _trans
 	// execute command list
 	g_CommandQueue->ExecuteCommandLists(NUM_EXT_THREAD, (ID3D12CommandList* const*)m_CommandList[m_ContextId]);
 
+	// setup fence
+	m_curFenceValue[m_ContextId] = ++g_finishFenceValue;
+	g_CommandQueue->Signal(g_FinishFence, g_finishFenceValue);
+
 	// switch to next context id
-	m_ContextId = (m_ContextId + 1) % NUM_COMMANDLIST;
+	m_ContextId = (m_ContextId + 1) % NUM_ACCUMULATED_FRAMES;
 }
 
 void UntexturedObjectsD3D12MultiThread::Shutdown()
 {
 	// Make sure everything is flushed out before releasing anything.
+	HANDLE handleEvent = CreateEventEx(nullptr, FALSE, FALSE, EVENT_ALL_ACCESS);
 	g_CommandQueue->Signal(g_FinishFence, ++g_finishFenceValue);
-	g_FinishFence->SetEventOnCompletion(g_finishFenceValue, g_finishFenceEvent);
-	WaitForSingleObject(g_finishFenceEvent, INFINITE);
+	g_FinishFence->SetEventOnCompletion(g_finishFenceValue, handleEvent);
+	WaitForSingleObject(handleEvent, INFINITE);
+	CloseHandle(handleEvent);
 
 	m_ThreadEnded = true;
 	for (int i = 0; i < NUM_EXT_THREAD; ++i)
@@ -182,6 +195,9 @@ void UntexturedObjectsD3D12MultiThread::Shutdown()
 	m_IndexBuffer.release();
 	m_GeometryBufferHeap.release();
 
+	m_RootSignature.release();
+	m_PipelineState.release();
+
 	// Close thread events and thread handles
 	for (int i = 0; i < NUM_EXT_THREAD; i++)
 	{
@@ -189,10 +205,7 @@ void UntexturedObjectsD3D12MultiThread::Shutdown()
 		CloseHandle(m_ThreadEndEvent[i]);
 		CloseHandle(m_ThreadHandle[i]);
 
-		m_RootSignature[i].release();
-		m_PipelineState[i].release();
-
-		for (int k = 0; k < NUM_COMMANDLIST; k++)
+		for (int k = 0; k < NUM_ACCUMULATED_FRAMES; k++)
 		{
 			m_CommandAllocator[k][i].release();
 			m_CommandList[k][i].release();
@@ -282,7 +295,7 @@ void UntexturedObjectsD3D12MultiThread::RenderPart(int pid, int total)
 	m_CommandList[m_ContextId][pid]->Reset(m_CommandAllocator[m_ContextId][pid], 0);
 	
 	// Setup root signature
-	m_CommandList[m_ContextId][pid]->SetGraphicsRootSignature(m_RootSignature[pid]);
+	m_CommandList[m_ContextId][pid]->SetGraphicsRootSignature(m_RootSignature);
 
 	// Setup viewport
 	D3D12_VIEWPORT viewport = { 0, 0, FLOAT(g_ClientWidth), FLOAT(g_ClientHeight), 0.0f, 1.0f };
@@ -300,7 +313,7 @@ void UntexturedObjectsD3D12MultiThread::RenderPart(int pid, int total)
 	m_CommandList[m_ContextId][pid]->SetVertexBuffers(0, &m_VertexBufferView, 1);
 	m_CommandList[m_ContextId][pid]->SetIndexBuffer(&m_IndexBufferView);
 
-	m_CommandList[m_ContextId][pid]->SetPipelineState(m_PipelineState[pid]);
+	m_CommandList[m_ContextId][pid]->SetPipelineState(m_PipelineState);
 
 	// setup view projection matrix
 	m_CommandList[m_ContextId][pid]->SetGraphicsRoot32BitConstants(1, &m_ViewProjection, 0, 16);

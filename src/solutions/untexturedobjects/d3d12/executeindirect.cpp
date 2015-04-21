@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "executeindirect.h"
 #include "framework/gfx_dx12.h"
 #include "framework/gfx_dx11.h"	// for some utility function
@@ -15,7 +15,6 @@ extern int	g_ClientHeight;
 // Finish fence
 extern comptr<ID3D12Fence> g_FinishFence;
 extern UINT64 g_finishFenceValue;
-extern HANDLE g_finishFenceEvent;
 
 UntexturedObjectsD3D12ExecuteIndirect::UntexturedObjectsD3D12ExecuteIndirect()
 {
@@ -255,9 +254,11 @@ void UntexturedObjectsD3D12ExecuteIndirect::Render(const std::vector<Matrix>& _t
 void UntexturedObjectsD3D12ExecuteIndirect::Shutdown()
 {
 	// Make sure everything is flushed out before releasing anything.
+	HANDLE handleEvent = CreateEventEx(nullptr, FALSE, FALSE, EVENT_ALL_ACCESS);
 	g_CommandQueue->Signal(g_FinishFence, ++g_finishFenceValue);
-	g_FinishFence->SetEventOnCompletion(g_finishFenceValue, g_finishFenceEvent);
-	WaitForSingleObject(g_finishFenceEvent, INFINITE);
+	g_FinishFence->SetEventOnCompletion(g_finishFenceValue, handleEvent);
+	WaitForSingleObject(handleEvent, INFINITE);
+	CloseHandle(handleEvent);
 
 	m_CommandBuffer.release();
 	m_CommandSig.release();

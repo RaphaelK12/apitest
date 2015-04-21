@@ -21,6 +21,7 @@
 
 #if WITH_D3D12
 	#include <d3d12.h>
+	#define NUM_ACCUMULATED_FRAMES	3
 #endif
 #endif
 

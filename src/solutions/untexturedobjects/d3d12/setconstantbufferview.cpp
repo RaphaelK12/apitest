@@ -14,7 +14,6 @@ extern int	g_ClientHeight;
 // Finish fence
 extern comptr<ID3D12Fence> g_FinishFence;
 extern UINT64 g_finishFenceValue;
-extern HANDLE g_finishFenceEvent;
 
 UntexturedObjectsD3D12SetConstantBufferView::UntexturedObjectsD3D12SetConstantBufferView()
 {
@@ -24,6 +23,10 @@ bool UntexturedObjectsD3D12SetConstantBufferView::Init(const std::vector<Untextu
 	const std::vector<UntexturedObjectsProblem::Index>& _indices,
 	size_t _objectCount)
 {
+	m_ContextId = 0;
+	for (size_t i = 0; i < NUM_ACCUMULATED_FRAMES; ++i)
+		m_curFenceValue[i] = 0;
+
 	if (!CreatePSO())
 		return false;
 
@@ -117,26 +120,37 @@ bool UntexturedObjectsD3D12SetConstantBufferView::CreateGeometryBuffer(const std
 bool UntexturedObjectsD3D12SetConstantBufferView::CreateConstantBuffer(size_t count)
 {
 	// Create a (large) constant buffer
-	if (FAILED(g_D3D12Device->CreateCommittedResource(
-		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-		D3D12_HEAP_MISC_NONE,
-		&CD3D12_RESOURCE_DESC::Buffer(count * D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT),
-		D3D12_RESOURCE_USAGE_GENERIC_READ,
-		nullptr,
-		__uuidof(ID3D12Resource),
-		reinterpret_cast<void**>(&m_ConstantBuffer))))
+	for (int k = 0; k < NUM_ACCUMULATED_FRAMES; k++)
 	{
-		return false;
+		if (FAILED(g_D3D12Device->CreateCommittedResource(
+			&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+			D3D12_HEAP_MISC_NONE,
+			&CD3D12_RESOURCE_DESC::Buffer(count * D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT),
+			D3D12_RESOURCE_USAGE_GENERIC_READ,
+			nullptr,
+			__uuidof(ID3D12Resource),
+			reinterpret_cast<void**>(&m_ConstantBuffer[k]))))
+		{
+			return false;
+		}
 	}
-
-	m_ConstantBuffer->Map(0, nullptr, reinterpret_cast<void**>(&m_ConstantBufferData));
 
 	return true;
 }
 
 void UntexturedObjectsD3D12SetConstantBufferView::Render(const std::vector<Matrix>& _transforms)
 {
-	if (FAILED(m_CommandAllocator->Reset()))
+	// Check out fence
+	const UINT64 lastCompletedFence = g_FinishFence->GetCompletedValue();
+	if (m_curFenceValue[m_ContextId] > lastCompletedFence)
+	{
+		HANDLE handleEvent = CreateEventEx(nullptr, FALSE, FALSE, EVENT_ALL_ACCESS);
+		g_FinishFence->SetEventOnCompletion(m_curFenceValue[m_ContextId], handleEvent);
+		WaitForSingleObject(handleEvent, INFINITE);
+		CloseHandle(handleEvent);
+	}
+
+	if (FAILED(m_CommandAllocator[m_ContextId]->Reset()))
 		return;
 
 	unsigned int count = _transforms.size();
@@ -147,6 +161,8 @@ void UntexturedObjectsD3D12SetConstantBufferView::Render(const std::vector<Matri
 	Vec3 up = { 0, 0, 1 };
 	dir = normalize(dir);
 	Vec3 eye = at - 250.0f * dir;
+
+	m_ConstantBuffer[m_ContextId]->Map(0, nullptr, reinterpret_cast<void**>(&m_ConstantBufferData));
 	for (unsigned int i = 0; i < (unsigned int)count; ++i)
 		m_ConstantBufferData[4 * i].m = _transforms[i];
 	Matrix vp = mProj * matrix_look_at(eye, at, up);
@@ -154,46 +170,54 @@ void UntexturedObjectsD3D12SetConstantBufferView::Render(const std::vector<Matri
 	// Create Command List first time invoked
 	{
 		// Reset command list
-		m_CommandList->Reset(m_CommandAllocator, m_PipelineState);
+		m_CommandList[m_ContextId]->Reset(m_CommandAllocator[m_ContextId], m_PipelineState);
 
 		// Setup root signature
-		m_CommandList->SetGraphicsRootSignature(m_RootSignature);
+		m_CommandList[m_ContextId]->SetGraphicsRootSignature(m_RootSignature);
 
 		// Setup viewport
 		D3D12_VIEWPORT viewport = { 0, 0, FLOAT(g_ClientWidth), FLOAT(g_ClientHeight), 0.0f, 1.0f };
-		m_CommandList->RSSetViewports(1, &viewport);
+		m_CommandList[m_ContextId]->RSSetViewports(1, &viewport);
 
 		// Setup scissor
 		D3D12_RECT scissorRect = { 0, 0, g_ClientWidth, g_ClientHeight };
-		m_CommandList->RSSetScissorRects(1, &scissorRect);
+		m_CommandList[m_ContextId]->RSSetScissorRects(1, &scissorRect);
 
 		// Set Render Target
-		m_CommandList->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
+		m_CommandList[m_ContextId]->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
 
 		// Draw the triangle
-		m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		m_CommandList->SetVertexBuffers(0, &m_VertexBufferView, 1);
-		m_CommandList->SetIndexBuffer(&m_IndexBufferView);
+		m_CommandList[m_ContextId]->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		m_CommandList[m_ContextId]->SetVertexBuffers(0, &m_VertexBufferView, 1);
+		m_CommandList[m_ContextId]->SetIndexBuffer(&m_IndexBufferView);
 
-		m_CommandList->SetGraphicsRoot32BitConstants(1, &vp, 0, 16);
+		m_CommandList[m_ContextId]->SetGraphicsRoot32BitConstants(1, &vp, 0, 16);
 
 		unsigned int counter = 0;
 		for (unsigned int u = 0; u < count ; ++u) {
-			m_CommandList->SetGraphicsRootConstantBufferView(0, m_ConstantBuffer->GetGPUVirtualAddress() + D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * u);
-			m_CommandList->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
+			m_CommandList[m_ContextId]->SetGraphicsRootConstantBufferView(0, m_ConstantBuffer[m_ContextId]->GetGPUVirtualAddress() + D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * u);
+			m_CommandList[m_ContextId]->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
 		}
-		m_CommandList->Close();
+		m_CommandList[m_ContextId]->Close();
 	}
 
-	g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&m_CommandList);
+	g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&m_CommandList[m_ContextId]);
+
+	// setup fence
+	m_curFenceValue[m_ContextId] = ++g_finishFenceValue;
+	g_CommandQueue->Signal(g_FinishFence, g_finishFenceValue);
+
+	m_ContextId = (m_ContextId + 1) % NUM_ACCUMULATED_FRAMES;
 }
 
 void UntexturedObjectsD3D12SetConstantBufferView::Shutdown()
 {
 	// Make sure everything is flushed out before releasing anything.
+	HANDLE handleEvent = CreateEventEx(nullptr, FALSE, FALSE, EVENT_ALL_ACCESS);
 	g_CommandQueue->Signal(g_FinishFence, ++g_finishFenceValue);
-	g_FinishFence->SetEventOnCompletion(g_finishFenceValue, g_finishFenceEvent);
-	WaitForSingleObject(g_finishFenceEvent, INFINITE);
+	g_FinishFence->SetEventOnCompletion(g_finishFenceValue, handleEvent);
+	WaitForSingleObject(handleEvent, INFINITE);
+	CloseHandle(handleEvent);
 
 	m_RootSignature.release();
 	m_PipelineState.release();
@@ -202,22 +226,29 @@ void UntexturedObjectsD3D12SetConstantBufferView::Shutdown()
 	m_IndexBuffer.release();
 	m_GeometryBufferHeap.release();
 
-	m_ConstantBuffer.release();
+	for (int k = 0; k < NUM_ACCUMULATED_FRAMES; k++)
+	{
+		m_ConstantBuffer[k].release();
+		m_CommandAllocator[k].release();
+		m_CommandList[k].release();
+	}
 
-	m_CommandAllocator.release();
-	m_CommandList.release();
+	m_ConstantBufferData = 0;
 }
 
 bool UntexturedObjectsD3D12SetConstantBufferView::CreateCommandList()
 {
-	// create command queue allocator
-	HRESULT hr = g_D3D12Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&m_CommandAllocator);
-	if (FAILED(hr))
-		return false;
+	for (int k = 0; k < NUM_ACCUMULATED_FRAMES; k++)
+	{
+		// create command queue allocator
+		HRESULT hr = g_D3D12Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&m_CommandAllocator[k]);
+		if (FAILED(hr))
+			return false;
 
-	// Create Command List
-	g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, m_CommandAllocator, 0, __uuidof(ID3D12GraphicsCommandList), (void**)&m_CommandList);
-	m_CommandList->Close();
+		// Create Command List
+		g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, m_CommandAllocator[k], 0, __uuidof(ID3D12GraphicsCommandList), (void**)&m_CommandList[k]);
+		m_CommandList[k]->Close();
+	}
 
 	return true;
 }
