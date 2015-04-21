@@ -33,14 +33,12 @@ private:
 	comptr<ID3D12PipelineState>			m_PipelineState;
 	comptr<ID3D12RootSignature>			m_RootSignature;
 
-	comptr<ID3D12Heap>					m_GeometryBufferHeap;
-	comptr<ID3D12Resource>				m_VertexBuffer;
-	comptr<ID3D12Resource>				m_IndexBuffer;
+	comptr<ID3D12Resource>				m_GeometryBuffer;
 	D3D12_VERTEX_BUFFER_VIEW			m_VertexBufferView;
 	D3D12_INDEX_BUFFER_VIEW				m_IndexBufferView;
 
 	Matrix								m_ViewProjection;
-	const std::vector<Matrix>*			m_Transforms;
+	const Matrix*						m_Transforms;
 
 	size_t								m_ObjectCount;
 	size_t								m_IndexCount;
