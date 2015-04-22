@@ -163,7 +163,7 @@ ProblemFactory::ProblemFactory(bool _skipInit)
         #endif
 		#if WITH_D3D12
 			mSolutions[mProblems.back()->GetName()].push_back(new TexturedQuadsD3D12Naive());
-			//mSolutions[mProblems.back()->GetName()].push_back(new TexturedQuadsD3D12MultiThread());	to be implemented
+			mSolutions[mProblems.back()->GetName()].push_back(new TexturedQuadsD3D12MultiThread());
 			mSolutions[mProblems.back()->GetName()].push_back(new TexturedQuadsD3D12Notex());
 		#endif
     } else {
