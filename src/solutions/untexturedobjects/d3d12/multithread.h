@@ -42,7 +42,6 @@ private:
 
 	size_t								m_ObjectCount;
 	size_t								m_IndexCount;
-	size_t								m_DescriptorSize;
 
 	HANDLE								m_ThreadHandle[NUM_EXT_THREAD];
 	HANDLE								m_ThreadBeginEvent[NUM_EXT_THREAD];

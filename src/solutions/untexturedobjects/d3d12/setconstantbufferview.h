@@ -39,7 +39,6 @@ private:
 	MatrixBuffer*						m_ConstantBufferData;
 
 	size_t								m_IndexCount;
-	size_t								m_DescriptorSize;
 
 	comptr<ID3D12CommandAllocator>		m_CommandAllocator[NUM_ACCUMULATED_FRAMES];
 	comptr<ID3D12GraphicsCommandList>	m_CommandList[NUM_ACCUMULATED_FRAMES];

@@ -39,6 +39,13 @@ private:
 	size_t								mBufferSize;
 	UINT8*								m_VertexData;
 
+	size_t								kVertexSizeBytes;
+	size_t								kParticleCount;
+	size_t								kTotalVertices;
+	size_t								kOffsetInBytes;
+	size_t								kOffsetInVertices;
+	size_t								kPerticleInBytes;
+
 	bool CreatePSO();
 	bool CreateGeometryBuffer(size_t _maxVertexCount);
 	bool CreateCommandList();

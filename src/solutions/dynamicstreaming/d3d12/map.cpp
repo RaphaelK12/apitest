@@ -66,14 +66,6 @@ void DynamicStreamingD3D12Map::Render(const std::vector<Vec2>& _vertices)
 	Constants cb;
 	cb.width = 2.0f / mWidth;
 	cb.height = -2.0f / mHeight;
-
-	const size_t kVertexSizeBytes = sizeof(Vec2);
-	const size_t kParticleCount = int(_vertices.size()) / kVertsPerParticle;
-	const size_t kTotalVertices = _vertices.size();
-
-	const size_t kOffsetInBytes = mBufferSize * m_ContextId;
-	const size_t kOffsetInVertices = kTotalVertices * m_ContextId;
-	const size_t kPerticleInBytes = kVertsPerParticle * kVertexSizeBytes;
 	
 	// Update vertex buffer
 	//memcpy(m_VertexData + mBufferSize * m_ContextId, _vertices.data(), mBufferSize);
@@ -240,6 +232,13 @@ bool DynamicStreamingD3D12Map::CreateGeometryBuffer(size_t _maxVertexCount)
 	m_VertexBufferView = D3D12_VERTEX_BUFFER_VIEW{ m_GeometryBuffer->GetGPUVirtualAddress(), totalSize, sizeofVertex };
 
 	m_GeometryBuffer->Map(0, 0, reinterpret_cast<void**>(&m_VertexData));
+
+	kVertexSizeBytes = sizeof(Vec2);
+	kParticleCount = _maxVertexCount / kVertsPerParticle;
+	kTotalVertices = _maxVertexCount;
+	kOffsetInBytes = mBufferSize * m_ContextId;
+	kOffsetInVertices = kTotalVertices * m_ContextId;
+	kPerticleInBytes = kVertsPerParticle * kVertexSizeBytes;
 
 	return true;
 }

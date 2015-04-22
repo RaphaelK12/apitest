@@ -2,6 +2,8 @@
 
 #include "solutions/dynamicstreamingsoln.h"
 
+#define NUM_EXT_THREAD	8
+
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
@@ -19,9 +21,10 @@ public:
 	virtual bool SupportsApi(EGfxApi _api) const override { return _api == EGfxApi::Direct3D12; }
 
 private:
-	/*struct MatrixBuffer
+	struct Constants
 	{
-	Matrix m;
+		float width;
+		float height;
 	};
 
 	comptr<ID3D12PipelineState>			m_PipelineState;
@@ -29,19 +32,34 @@ private:
 
 	comptr<ID3D12Resource>				m_GeometryBuffer;
 	D3D12_VERTEX_BUFFER_VIEW			m_VertexBufferView;
-	D3D12_INDEX_BUFFER_VIEW				m_IndexBufferView;
 
-	size_t								m_IndexCount;
-	size_t								m_DescriptorSize;
-
-	comptr<ID3D12CommandAllocator>		m_CommandAllocator[NUM_ACCUMULATED_FRAMES];
-	comptr<ID3D12GraphicsCommandList>	m_CommandList[NUM_ACCUMULATED_FRAMES];
+	comptr<ID3D12CommandAllocator>		m_CommandAllocator[NUM_ACCUMULATED_FRAMES][NUM_EXT_THREAD];
+	comptr<ID3D12GraphicsCommandList>	m_CommandList[NUM_ACCUMULATED_FRAMES][NUM_EXT_THREAD];
+	HANDLE								m_ThreadHandle[NUM_EXT_THREAD];
+	HANDLE								m_ThreadBeginEvent[NUM_EXT_THREAD];
+	HANDLE								m_ThreadEndEvent[NUM_EXT_THREAD];
+	bool								m_ThreadEnded;
 
 	UINT64								m_curFenceValue[NUM_ACCUMULATED_FRAMES];
 	int									m_ContextId;
+	UINT8*								m_VertexData;
+	
+	size_t								m_BufferSize;
+	size_t								kVertexSizeBytes;
+	size_t								kParticleCount;
+	size_t								kTotalVertices;
+	size_t								kOffsetInBytes;
+	size_t								kOffsetInVertices;
+	size_t								kPerticleInBytes;
+
+	Constants							m_ConstantData;
+	UINT8*								m_VertexSource;
 
 	bool CreatePSO();
-	bool CreateGeometryBuffer(const std::vector<UntexturedObjectsProblem::Vertex>& _vertices,
-	const std::vector<UntexturedObjectsProblem::Index>& _indices);
-	bool CreateCommandList();*/
+	bool CreateGeometryBuffer(size_t _maxVertexCount);
+	bool CreateCommandList();
+	bool CreateThreads();
+
+	void RenderPart(int pid, int total);
+	void renderMultiThread(int tid);
 };

@@ -41,7 +41,6 @@ private:
 	MatrixBuffer*						m_ConstantBufferData;
 
 	size_t								m_IndexCount;
-	size_t								m_DescriptorSize;
 
 	comptr<ID3D12Resource>				m_CommandBuffer;
 	comptr<ID3D12CommandSignature>		m_CommandSig;
