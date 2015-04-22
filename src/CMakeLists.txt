@@ -128,6 +128,9 @@ if( apitest_WITH_D3D12 )
 		solutions/untexturedobjects/d3d12/setconstantbufferview.cpp
 		solutions/untexturedobjects/d3d12/executeindirect.cpp
 		solutions/untexturedobjects/d3d12/multithread.cpp
+
+		solutions/dynamicstreaming/d3d12/map.cpp
+		solutions/dynamicstreaming/d3d12/multithread.cpp
 	)
 endif( apitest_WITH_D3D12 )
 
@@ -350,6 +353,14 @@ source_group( "Solutions\\UntexturedObjects" FILES
 )
 
 if( apitest_WITH_D3D12 )
+source_group( "Solutions\\DynamicStreaming\\D3D12\\Map" FILES
+	solutions/dynamicstreaming/d3d12/map.cpp
+	solutions/dynamicstreaming/d3d12/map.h
+)
+source_group( "Solutions\\DynamicStreaming\\D3D12\\MultiThread" FILES
+	solutions/dynamicstreaming/d3d12/multithread.cpp
+	solutions/dynamicstreaming/d3d12/multithread.h
+)
 source_group( "Solutions\\UntexturedObjects\\D3D12\\SetConstants" FILES 
 	solutions/untexturedobjects/d3d12/setconstants.cpp
 	solutions/untexturedobjects/d3d12/setconstants.h

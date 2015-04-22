@@ -46,10 +46,12 @@
 #endif
 
 #if WITH_D3D12
-#	include "solutions\untexturedobjects\d3d12\setconstants.h"
-#	include "solutions\untexturedobjects\d3d12\setconstantbufferview.h"
-#	include "solutions\untexturedobjects\d3d12\executeindirect.h"
-#	include "solutions\untexturedobjects\d3d12\multithread.h"
+#	include "solutions/dynamicstreaming/d3d12/map.h"
+#	include "solutions/dynamicstreaming/d3d12/multithread.h"
+#	include "solutions/untexturedobjects/d3d12/setconstants.h"
+#	include "solutions/untexturedobjects/d3d12/setconstantbufferview.h"
+#	include "solutions/untexturedobjects/d3d12/executeindirect.h"
+#	include "solutions/untexturedobjects/d3d12/multithread.h"
 #endif
 
 // --------------------------------------------------------------------------------------------------------------------
@@ -86,6 +88,10 @@ ProblemFactory::ProblemFactory(bool _skipInit)
             mSolutions[mProblems.back()->GetName()].push_back(new DynamicStreamingD3D11MapNoOverwrite());
             mSolutions[mProblems.back()->GetName()].push_back(new DynamicStreamingD3D11UpdateSubresource());
         #endif
+		#if WITH_D3D12
+			mSolutions[mProblems.back()->GetName()].push_back(new DynamicStreamingD3D12Map());
+			mSolutions[mProblems.back()->GetName()].push_back(new DynamicStreamingD3D12MultiThread());
+		#endif
     } else {
         newProb->Shutdown();
         SafeDelete(newProb);

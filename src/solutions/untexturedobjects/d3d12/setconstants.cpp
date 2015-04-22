@@ -206,8 +206,8 @@ void UntexturedObjectsD3D12SetConstants::Shutdown()
 
 	for (int k = 0; k < NUM_ACCUMULATED_FRAMES; k++)
 	{
-		m_CommandAllocator[k].release();
 		m_CommandList[k].release();
+		m_CommandAllocator[k].release();
 	}
 }
 

@@ -1,31 +1,27 @@
 #pragma once
 
-#include "solutions/untexturedobjectssoln.h"
+#include "solutions/dynamicstreamingsoln.h"
 
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
-class UntexturedObjectsD3D12SetConstants : public UntexturedObjectsSolution
+class DynamicStreamingD3D12MultiThread : public DynamicStreamingSolution
 {
 public:
-	UntexturedObjectsD3D12SetConstants();
-	virtual ~UntexturedObjectsD3D12SetConstants() { }
+	DynamicStreamingD3D12MultiThread();
+	virtual ~DynamicStreamingD3D12MultiThread();
 
-	virtual bool Init(const std::vector<UntexturedObjectsProblem::Vertex>& _vertices,
-		const std::vector<UntexturedObjectsProblem::Index>& _indices,
-		size_t _objectCount) override;
+	virtual bool Init(size_t _maxVertexCount) override;
+	virtual void Render(const std::vector<Vec2>& _vertices) override;
+	virtual void Shutdown() override;
 
-	virtual void Render(const std::vector<Matrix>& _transforms);
-	virtual void Shutdown();
-
-	virtual std::string GetName() const { return "UntexturedSetConstants"; }
-
+	virtual std::string GetName() const override { return "D3D12MultiThread"; }
 	virtual bool SupportsApi(EGfxApi _api) const override { return _api == EGfxApi::Direct3D12; }
 
 private:
-	struct MatrixBuffer
+	/*struct MatrixBuffer
 	{
-		Matrix m;
+	Matrix m;
 	};
 
 	comptr<ID3D12PipelineState>			m_PipelineState;
@@ -36,6 +32,7 @@ private:
 	D3D12_INDEX_BUFFER_VIEW				m_IndexBufferView;
 
 	size_t								m_IndexCount;
+	size_t								m_DescriptorSize;
 
 	comptr<ID3D12CommandAllocator>		m_CommandAllocator[NUM_ACCUMULATED_FRAMES];
 	comptr<ID3D12GraphicsCommandList>	m_CommandList[NUM_ACCUMULATED_FRAMES];
@@ -44,7 +41,7 @@ private:
 	int									m_ContextId;
 
 	bool CreatePSO();
-	bool CreateGeometryBuffer(	const std::vector<UntexturedObjectsProblem::Vertex>& _vertices,
-								const std::vector<UntexturedObjectsProblem::Index>& _indices);
-	bool CreateCommandList();
+	bool CreateGeometryBuffer(const std::vector<UntexturedObjectsProblem::Vertex>& _vertices,
+	const std::vector<UntexturedObjectsProblem::Index>& _indices);
+	bool CreateCommandList();*/
 };
