@@ -60,7 +60,7 @@ bool GfxApiDirect3D12::Init(const std::string& _title, int _x, int _y, int _widt
 #endif
 
 	// Create D3D12 Device
-	hr = D3D12CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, flag, D3D_FEATURE_LEVEL_11_0, D3D12_SDK_VERSION, __uuidof(ID3D12Device), (void **)&g_D3D12Device);
+	hr = D3D12CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, flag, D3D_FEATURE_LEVEL_9_1, D3D12_SDK_VERSION, __uuidof(ID3D12Device), (void **)&g_D3D12Device);
 	if (FAILED(hr))
 		return false;
 

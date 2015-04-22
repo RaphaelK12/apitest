@@ -8,6 +8,7 @@ extern comptr<ID3D12DescriptorHeap>			g_HeapRTV;
 extern comptr<ID3D12DescriptorHeap>			g_HeapDSV;
 extern comptr<ID3D12Resource>				g_BackBuffer;
 extern comptr<ID3D12CommandQueue>			g_CommandQueue;
+extern comptr<ID3D12GraphicsCommandList>	g_CommandList;
 extern int	g_ClientWidth;
 extern int	g_ClientHeight;
 
@@ -52,9 +53,9 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreatePSO()
 	descRanges[0].Init(D3D12_DESCRIPTOR_RANGE_CBV, 1, 0);
 
 	D3D12_ROOT_PARAMETER rootParameters[2];
-	//rootParameters[0].InitAsConstantBufferView(0);
+	rootParameters[0].InitAsConstantBufferView(0);
 	//rootParameters[0].InitAsDescriptorTable(1, descRanges);
-	rootParameters[0].InitAsConstants(16, 0);
+	//rootParameters[0].InitAsConstants(16, 0);
 	rootParameters[1].InitAsConstants(16, 1);
 
 	D3D12_ROOT_SIGNATURE rootSig = { 2, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
@@ -101,7 +102,7 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreatePSO()
 bool UntexturedObjectsD3D12ExecuteIndirect::CreateGeometryBuffer(const std::vector<UntexturedObjectsProblem::Vertex>& _vertices,
 	const std::vector<UntexturedObjectsProblem::Index>& _indices)
 {
-	const size_t size = 65536 * 256;
+	const size_t size = 65536 * 2;
 
 	if (FAILED(g_D3D12Device->CreateHeap(
 		&CD3D12_HEAP_DESC(size, D3D12_HEAP_TYPE_UPLOAD, 0, D3D12_HEAP_MISC_DENY_TEXTURES),
@@ -126,26 +127,16 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreateCommandSignature()
 {
 	// It doesn't work here somehow, maybe come back later
 	// Updating Constant through set32bitsconstant parameter works here, however it requires updating the buffer every frame.
-	D3D12_INDIRECT_PARAMETER para[3];
-	memset(para, 0, sizeof(para));
-	/*para[0].Type = D3D12_INDIRECT_PARAMETER_CONSTANT;
-	para[0].Constant.RootParameterIndex = 1;
-	para[0].Constant.DestOffsetIn32BitValues = 0;
-	para[0].Constant.Num32BitValuesToSet = 16;
-	para[1].Type = D3D12_INDIRECT_PARAMETER_DRAW_INDEXED;*/
+	D3D12_INDIRECT_PARAMETER para[2];
 	para[0].Type = D3D12_INDIRECT_PARAMETER_CONSTANT_BUFFER_VIEW;
 	para[0].ConstantBufferView.RootParameterIndex = 0;
-	para[1].Type = D3D12_INDIRECT_PARAMETER_CONSTANT;
-	para[1].Constant.RootParameterIndex = 0;
-	para[1].Constant.DestOffsetIn32BitValues = 0;
-	para[1].Constant.Num32BitValuesToSet = 16;
-	para[2].Type = D3D12_INDIRECT_PARAMETER_DRAW_INDEXED;
-	
+	para[1].Type = D3D12_INDIRECT_PARAMETER_DRAW_INDEXED;
+
 	D3D12_COMMAND_SIGNATURE desc;
 	desc.NodeMask = 1;
 	desc.ParameterCount = 2;
-	desc.pParameters = &para[1];
-	desc.ByteStride = 84;
+	desc.pParameters = para;
+	desc.ByteStride = 128;
 
 	if (FAILED(g_D3D12Device->CreateCommandSignature(&desc, m_RootSignature, __uuidof(ID3D12CommandSignature), reinterpret_cast<void**>(&m_CommandSig))))
 		return false;
@@ -186,10 +177,10 @@ void UntexturedObjectsD3D12ExecuteIndirect::Render(const std::vector<Matrix>& _t
 	Vec3 up = { 0, 0, 1 };
 	dir = normalize(dir);
 	Vec3 eye = at - 250.0f * dir;
-	//for (unsigned int i = 0; i < (unsigned int)count; ++i)
-//		m_ConstantBufferData[4 * i].m = _transforms[i];
+	for (unsigned int i = 0; i < (unsigned int)count; ++i)
+		m_ConstantBufferData[4 * i].m = _transforms[i];
 	Matrix vp = mProj * matrix_look_at(eye, at, up);
-	
+	/*
 	static bool flag = true;
 	if (flag)
 	{
@@ -210,14 +201,12 @@ void UntexturedObjectsD3D12ExecuteIndirect::Render(const std::vector<Matrix>& _t
 			args[i].arg.StartInstanceLocation = 0;
 		}
 
-		int data = sizeof(CustomData);
-
 		m_CommandBuffer = CreateBufferFromVector(args, m_GeometryBufferHeap, 0x20000);
 		if (!m_CommandBuffer)
 			return;
 
-		//flag = false;
-	}
+		flag = false;
+	}*/
 
 	// Create Command List first time invoked
 	{
@@ -248,12 +237,12 @@ void UntexturedObjectsD3D12ExecuteIndirect::Render(const std::vector<Matrix>& _t
 
 		m_CommandList->SetGraphicsRoot32BitConstants(1, &vp, 0, 16);
 
-		m_CommandList->ExecuteIndirect(m_CommandSig, count / 2, m_CommandBuffer, 0, 0, 0);
+		//g_CommandList->ExecuteIndirect(m_CommandSig, count/3, m_CommandBuffer, 0, 0, 0);
 		/*
 		unsigned int counter = 0;
 		for (unsigned int u = 0; u < count; ++u) {
-			m_CommandList->SetGraphicsRootConstantBufferView(0, m_ConstantBuffer->GetGPUVirtualAddress() + D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * u);
-			m_CommandList->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
+			g_CommandList->SetGraphicsRootConstantBufferView(0, m_ConstantBuffer->GetGPUVirtualAddress() + D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * u);
+			g_CommandList->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
 		}*/
 
 		m_CommandList->Close();

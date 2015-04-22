@@ -101,32 +101,23 @@ bool UntexturedObjectsD3D12MultiThread::CreatePSO()
 bool UntexturedObjectsD3D12MultiThread::CreateGeometryBuffer(const std::vector<UntexturedObjectsProblem::Vertex>& _vertices,
 																const std::vector<UntexturedObjectsProblem::Index>& _indices)
 {
-	const size_t sizeofVertex = sizeof(UntexturedObjectsProblem::Vertex);
-	const size_t sizeofVertices = sizeofVertex * _vertices.size();
-	const size_t sizeofIndex = sizeof(UntexturedObjectsProblem::Index);
-	const size_t sizeofIndices = sizeofIndex * _indices.size();
-	const size_t totalSize = sizeofIndices + sizeofIndices;
+	const size_t size = 65536 * 2;
 
-	if (FAILED(g_D3D12Device->CreateCommittedResource(
-		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-		D3D12_HEAP_MISC_NONE,
-		&CD3D12_RESOURCE_DESC::Buffer(totalSize),
-		D3D12_RESOURCE_USAGE_GENERIC_READ,
-		nullptr,
-		IID_PPV_ARGS(&m_GeometryBuffer)
-		)))
+	if (FAILED(g_D3D12Device->CreateHeap(
+		&CD3D12_HEAP_DESC(size, D3D12_HEAP_TYPE_UPLOAD, 0, D3D12_HEAP_MISC_DENY_TEXTURES),
+		__uuidof(ID3D12Heap),
+		reinterpret_cast<void**>(&m_GeometryBufferHeap))))
 		return false;
 
-	UINT8* pRaw = 0;
-	m_GeometryBuffer->Map(0, 0, reinterpret_cast<void**>(&pRaw));
-	memcpy(pRaw, _vertices.data(), sizeofVertices);
-	memcpy(pRaw + sizeofVertices, _indices.data(), sizeofIndices);
-	m_GeometryBuffer->Unmap(0, 0);
+	m_VertexBuffer = CreateBufferFromVector(_vertices, m_GeometryBufferHeap, 0);
+	m_IndexBuffer = CreateBufferFromVector(_indices, m_GeometryBufferHeap, 0x10000);	// Minimum size for VB and IB is 64K ?
+	if (!m_VertexBuffer || !m_IndexBuffer)
+		return false;
 
 	m_IndexCount = _indices.size();
 
-	m_VertexBufferView = D3D12_VERTEX_BUFFER_VIEW{ m_GeometryBuffer->GetGPUVirtualAddress(), sizeofVertices, sizeofVertex };
-	m_IndexBufferView = D3D12_INDEX_BUFFER_VIEW{ m_GeometryBuffer->GetGPUVirtualAddress() + sizeofVertices, sizeofIndices, DXGI_FORMAT_R16_UINT };
+	m_VertexBufferView = D3D12_VERTEX_BUFFER_VIEW{ m_VertexBuffer->GetGPUVirtualAddress(), sizeof(UntexturedObjectsProblem::Vertex) * _vertices.size(), sizeof(UntexturedObjectsProblem::Vertex) };
+	m_IndexBufferView = D3D12_INDEX_BUFFER_VIEW{ m_IndexBuffer->GetGPUVirtualAddress(), sizeof(UntexturedObjectsProblem::Index) * _indices.size(), DXGI_FORMAT_R16_UINT };
 
 	return true;
 }
@@ -169,7 +160,7 @@ void UntexturedObjectsD3D12MultiThread::Render(const std::vector<Matrix>& _trans
 	Vec3 eye = at - 250.0f * dir;
 	
 	m_ViewProjection = mProj * matrix_look_at(eye, at, up);
-	m_Transforms = _transforms.data();
+	m_Transforms = &_transforms;
 
 	for (int i = 0; i < NUM_EXT_THREAD; ++i)
 		SetEvent(m_ThreadBeginEvent[i]);
@@ -200,7 +191,10 @@ void UntexturedObjectsD3D12MultiThread::Shutdown()
 		SetEvent(m_ThreadBeginEvent[i]);
 	WaitForMultipleObjects(NUM_EXT_THREAD, m_ThreadHandle, 1, INFINITE);
 
-	m_GeometryBuffer.release();
+	m_VertexBuffer.release();
+	m_IndexBuffer.release();
+	m_GeometryBufferHeap.release();
+
 	m_RootSignature.release();
 	m_PipelineState.release();
 
@@ -298,7 +292,7 @@ void UntexturedObjectsD3D12MultiThread::RenderPart(int pid, int total)
 {
 	// reset command list
 	m_CommandAllocator[m_ContextId][pid]->Reset();
-	m_CommandList[m_ContextId][pid]->Reset(m_CommandAllocator[m_ContextId][pid], m_PipelineState);
+	m_CommandList[m_ContextId][pid]->Reset(m_CommandAllocator[m_ContextId][pid], 0);
 	
 	// Setup root signature
 	m_CommandList[m_ContextId][pid]->SetGraphicsRootSignature(m_RootSignature);
@@ -319,6 +313,8 @@ void UntexturedObjectsD3D12MultiThread::RenderPart(int pid, int total)
 	m_CommandList[m_ContextId][pid]->SetVertexBuffers(0, &m_VertexBufferView, 1);
 	m_CommandList[m_ContextId][pid]->SetIndexBuffer(&m_IndexBufferView);
 
+	m_CommandList[m_ContextId][pid]->SetPipelineState(m_PipelineState);
+
 	// setup view projection matrix
 	m_CommandList[m_ContextId][pid]->SetGraphicsRoot32BitConstants(1, &m_ViewProjection, 0, 16);
 	
@@ -326,7 +322,7 @@ void UntexturedObjectsD3D12MultiThread::RenderPart(int pid, int total)
 	size_t end = start + m_ObjectCount / total;
 	unsigned int counter = 0;
 	for (unsigned int u = start; u < end; ++u) {
-		m_CommandList[m_ContextId][pid]->SetGraphicsRoot32BitConstants(0, &(m_Transforms[u]), 0, 16);
+		m_CommandList[m_ContextId][pid]->SetGraphicsRoot32BitConstants(0, &((*m_Transforms)[u]), 0, 16);
 		m_CommandList[m_ContextId][pid]->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
 	}
 	

@@ -120,7 +120,6 @@ ProblemFactory::ProblemFactory(bool _skipInit)
 			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12SetConstants());
 			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12SetConstantBufferView());
 			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12MultiThread());
-			//Solutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12ExecuteIndirect()); not working yet
 		#endif
     } else {
         newProb->Shutdown();
