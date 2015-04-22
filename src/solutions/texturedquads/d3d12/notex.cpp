@@ -1,7 +1,6 @@
 #include "pch.h"
 
-#include "problems/dynamicstreaming.h"
-#include "map.h"
+#include "notex.h"
 #include "framework/gfx_dx11.h"
 #include "framework/gfx_dx12.h"
 
@@ -19,19 +18,17 @@ extern UINT64 g_finishFenceValue;
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
-DynamicStreamingD3D12Map::DynamicStreamingD3D12Map()
-{
-}
-// --------------------------------------------------------------------------------------------------------------------
-DynamicStreamingD3D12Map::~DynamicStreamingD3D12Map()
+TexturedQuadsD3D12Notex::TexturedQuadsD3D12Notex()
 {
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-bool DynamicStreamingD3D12Map::Init(size_t _maxVertexCount)
+bool TexturedQuadsD3D12Notex::Init(const std::vector<TexturedQuadsProblem::Vertex>& _vertices,
+	const std::vector<TexturedQuadsProblem::Index>& _indices,
+	const std::vector<TextureDetails*>& _textures,
+	size_t _objectCount)
 {
 	m_ContextId = 0;
-	m_VertexData = 0;
 	for (size_t i = 0; i < NUM_ACCUMULATED_FRAMES; ++i)
 		m_curFenceValue[i] = 0;
 
@@ -41,14 +38,13 @@ bool DynamicStreamingD3D12Map::Init(size_t _maxVertexCount)
 	if (!CreateCommandList())
 		return false;
 
-	if (!CreateGeometryBuffer(_maxVertexCount))
+	if (!CreateGeometryBuffer(_vertices, _indices))
 		return false;
-
 	return true;
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-void DynamicStreamingD3D12Map::Render(const std::vector<Vec2>& _vertices)
+void TexturedQuadsD3D12Notex::Render(const std::vector<Matrix>& _transforms)
 {
 	// Check out fence
 	const UINT64 lastCompletedFence = g_FinishFence->GetCompletedValue();
@@ -63,12 +59,16 @@ void DynamicStreamingD3D12Map::Render(const std::vector<Vec2>& _vertices)
 	if (FAILED(m_CommandAllocator[m_ContextId]->Reset()))
 		return;
 
-	Constants cb;
-	cb.width = 2.0f / mWidth;
-	cb.height = -2.0f / mHeight;
-	
-	// Update vertex buffer
-	//memcpy(m_VertexData + mBufferSize * m_ContextId, _vertices.data(), mBufferSize);
+	unsigned int count = _transforms.size();
+
+	// Program
+	Vec3 dir = { 0, 0, 1 };
+	Vec3 at = { 0, 0, 0 };
+	Vec3 up = { 0, 1, 0 };
+	dir = normalize(dir);
+	Vec3 eye = at - 250 * dir;
+	Matrix view = matrix_look_at(eye, at, up);
+	Matrix vp = mProj * view;
 
 	// Create Command List first time invoked
 	{
@@ -92,26 +92,17 @@ void DynamicStreamingD3D12Map::Render(const std::vector<Vec2>& _vertices)
 		// Draw the triangle
 		m_CommandList[m_ContextId]->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		m_CommandList[m_ContextId]->SetVertexBuffers(0, &m_VertexBufferView, 1);
+		m_CommandList[m_ContextId]->SetIndexBuffer(&m_IndexBufferView);
 
-		// Set constant
-		m_CommandList[m_ContextId]->SetGraphicsRoot32BitConstants(1, &cb, 0, 16);
+		m_CommandList[m_ContextId]->SetGraphicsRoot32BitConstants(1, &vp, 0, 16);
 
-		// draw command
-		size_t memOffset = 0;
-		size_t vertOfset = 0;
-		for (unsigned int u = 0; u < kParticleCount; ++u) {
-			// could be done out of the loop, the memory copy is performed here in order to get apple to apple comparison
-			memcpy(m_VertexData + kOffsetInBytes + memOffset, ((UINT8*)_vertices.data()) + memOffset, kPerticleInBytes);
-
-			// issue draw command
-			m_CommandList[m_ContextId]->DrawInstanced(kVertsPerParticle, 1, kOffsetInVertices + vertOfset, 0);
-
-			// update offset
-			memOffset += kPerticleInBytes;
-			vertOfset += kVertsPerParticle;
+		ConstantsPerDraw perDrawData;
+		for (unsigned int u = 0; u < count; ++u) {
+			perDrawData.World = _transforms[u];
+			perDrawData.InstanceId = u;
+			m_CommandList[m_ContextId]->SetGraphicsRoot32BitConstants(0, &perDrawData, 0, 17);
+			m_CommandList[m_ContextId]->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, u);
 		}
-
-		// close the command list
 		m_CommandList[m_ContextId]->Close();
 	}
 
@@ -125,7 +116,7 @@ void DynamicStreamingD3D12Map::Render(const std::vector<Vec2>& _vertices)
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-void DynamicStreamingD3D12Map::Shutdown()
+void TexturedQuadsD3D12Notex::Shutdown()
 {
 	// Make sure everything is flushed out before releasing anything.
 	HANDLE handleEvent = CreateEventEx(nullptr, FALSE, FALSE, EVENT_ALL_ACCESS);
@@ -145,17 +136,19 @@ void DynamicStreamingD3D12Map::Shutdown()
 	}
 }
 
+
 // --------------------------------------------------------------------------------------------------------------------
-bool DynamicStreamingD3D12Map::CreatePSO()
+bool TexturedQuadsD3D12Notex::CreatePSO()
 {
 	// compile shader first
-	comptr<ID3DBlob> vsCode = CompileShader(L"streaming_vb_d3d12_vs.hlsl", "vsMain", "vs_5_0");
-	comptr<ID3DBlob> psCode = CompileShader(L"streaming_vb_d3d12_ps.hlsl", "psMain", "ps_5_0");
+	comptr<ID3DBlob> vsCode = CompileShader(L"textures_d3d12_notex_vs.hlsl", "vsMain", "vs_5_0");
+	comptr<ID3DBlob> psCode = CompileShader(L"textures_d3d12_notex_ps.hlsl", "psMain", "ps_5_0");
 
-	D3D12_ROOT_PARAMETER rootParameters[1];
-	rootParameters[0].InitAsConstants(8, 0);
+	D3D12_ROOT_PARAMETER rootParameters[2];
+	rootParameters[0].InitAsConstants(17, 0);
+	rootParameters[1].InitAsConstants(16, 1);
 
-	D3D12_ROOT_SIGNATURE rootSig = { 1, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
+	D3D12_ROOT_SIGNATURE rootSig = { 2, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
 	ID3DBlob* pBlobRootSig, *pBlobErrors;
 	HRESULT hr = (D3D12SerializeRootSignature(&rootSig, D3D_ROOT_SIGNATURE_V1, &pBlobRootSig, &pBlobErrors));
 	if (FAILED(hr))
@@ -167,7 +160,8 @@ bool DynamicStreamingD3D12Map::CreatePSO()
 
 	const D3D12_INPUT_ELEMENT_DESC inputLayout[] =
 	{
-		{ "Attr", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D12_INPUT_PER_VERTEX_DATA, 0 },
+		{ "ObjPos", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_PER_VERTEX_DATA, 0 },
+		{ "TexCoord", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_PER_VERTEX_DATA, 0 },
 	};
 	const UINT numInputLayoutElements = sizeof(inputLayout) / sizeof(inputLayout[0]);
 
@@ -196,7 +190,7 @@ bool DynamicStreamingD3D12Map::CreatePSO()
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-bool DynamicStreamingD3D12Map::CreateCommandList()
+bool TexturedQuadsD3D12Notex::CreateCommandList()
 {
 	for (int k = 0; k < NUM_ACCUMULATED_FRAMES; k++)
 	{
@@ -213,11 +207,14 @@ bool DynamicStreamingD3D12Map::CreateCommandList()
 	return true;
 }
 
-bool DynamicStreamingD3D12Map::CreateGeometryBuffer(size_t _maxVertexCount)
+bool TexturedQuadsD3D12Notex::CreateGeometryBuffer(	const std::vector<TexturedQuadsProblem::Vertex>& _vertices,
+													const std::vector<TexturedQuadsProblem::Index>& _indices)
 {
-	const size_t sizeofVertex = sizeof(Vec2);
-	m_BufferSize = sizeofVertex * _maxVertexCount;
-	const size_t totalSize = m_BufferSize * NUM_ACCUMULATED_FRAMES;
+	const size_t sizeofVertex = sizeof(TexturedQuadsProblem::Vertex);
+	const size_t sizeofVertices = sizeofVertex * _vertices.size();
+	const size_t sizeofIndex = sizeof(TexturedQuadsProblem::Index);
+	const size_t sizeofIndices = sizeofIndex * _indices.size();
+	const size_t totalSize = sizeofIndices + sizeofIndices;
 
 	if (FAILED(g_D3D12Device->CreateCommittedResource(
 		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
@@ -229,16 +226,16 @@ bool DynamicStreamingD3D12Map::CreateGeometryBuffer(size_t _maxVertexCount)
 		)))
 		return false;
 
-	m_VertexBufferView = D3D12_VERTEX_BUFFER_VIEW{ m_GeometryBuffer->GetGPUVirtualAddress(), totalSize, sizeofVertex };
+	UINT8* pRaw = 0;
+	m_GeometryBuffer->Map(0, 0, reinterpret_cast<void**>(&pRaw));
+	memcpy(pRaw, _vertices.data(), sizeofVertices);
+	memcpy(pRaw + sizeofVertices, _indices.data(), sizeofIndices);
+	m_GeometryBuffer->Unmap(0, 0);
 
-	m_GeometryBuffer->Map(0, 0, reinterpret_cast<void**>(&m_VertexData));
+	m_IndexCount = _indices.size();
 
-	kVertexSizeBytes = sizeof(Vec2);
-	kParticleCount = _maxVertexCount / kVertsPerParticle;
-	kTotalVertices = _maxVertexCount;
-	kOffsetInBytes = m_BufferSize * m_ContextId;
-	kOffsetInVertices = kTotalVertices * m_ContextId;
-	kPerticleInBytes = kVertsPerParticle * kVertexSizeBytes;
+	m_VertexBufferView = D3D12_VERTEX_BUFFER_VIEW{ m_GeometryBuffer->GetGPUVirtualAddress(), sizeofVertices, sizeofVertex };
+	m_IndexBufferView = D3D12_INDEX_BUFFER_VIEW{ m_GeometryBuffer->GetGPUVirtualAddress() + sizeofVertices, sizeofIndices, DXGI_FORMAT_R16_UINT };
 
 	return true;
 }

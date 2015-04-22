@@ -1,28 +1,37 @@
 #pragma once
 
-#include "solutions/dynamicstreamingsoln.h"
+#include "solutions/texturedquadssoln.h"
 
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
-class DynamicStreamingD3D12Map : public DynamicStreamingSolution
+class TexturedQuadsD3D12Notex : public TexturedQuadsSolution
 {
 public:
-	DynamicStreamingD3D12Map();
-	virtual ~DynamicStreamingD3D12Map();
+	TexturedQuadsD3D12Notex();
+	virtual ~TexturedQuadsD3D12Notex() { }
 
-	virtual bool Init(size_t _maxVertexCount) override;
-	virtual void Render(const std::vector<Vec2>& _vertices) override;
-	virtual void Shutdown() override;
+	virtual bool Init(const std::vector<TexturedQuadsProblem::Vertex>& _vertices,
+		const std::vector<TexturedQuadsProblem::Index>& _indices,
+		const std::vector<TextureDetails*>& _textures,
+		size_t _objectCount);
 
-	virtual std::string GetName() const override { return "D3D12Map"; }
+	virtual void Render(const std::vector<Matrix>& _transforms);
+	virtual void Shutdown();
+
+	virtual std::string GetName() const { return "D3D12Notex (SingleThread SOL)"; }
 	virtual bool SupportsApi(EGfxApi _api) const override { return _api == EGfxApi::Direct3D12; }
 
 private:
-	struct Constants
+	struct ConstantsPerDraw
 	{
-		float width;
-		float height;
+		Matrix	World;
+		UINT32	InstanceId;
+	};
+
+	struct ConstantsPerFrame
+	{
+		Matrix ViewProjection;
 	};
 
 	comptr<ID3D12PipelineState>			m_PipelineState;
@@ -30,23 +39,18 @@ private:
 
 	comptr<ID3D12Resource>				m_GeometryBuffer;
 	D3D12_VERTEX_BUFFER_VIEW			m_VertexBufferView;
+	D3D12_INDEX_BUFFER_VIEW				m_IndexBufferView;
 
 	comptr<ID3D12CommandAllocator>		m_CommandAllocator[NUM_ACCUMULATED_FRAMES];
 	comptr<ID3D12GraphicsCommandList>	m_CommandList[NUM_ACCUMULATED_FRAMES];
 
 	UINT64								m_curFenceValue[NUM_ACCUMULATED_FRAMES];
 	int									m_ContextId;
-	size_t								m_BufferSize;
-	UINT8*								m_VertexData;
 
-	size_t								kVertexSizeBytes;
-	size_t								kParticleCount;
-	size_t								kTotalVertices;
-	size_t								kOffsetInBytes;
-	size_t								kOffsetInVertices;
-	size_t								kPerticleInBytes;
+	size_t								m_IndexCount;
 
 	bool CreatePSO();
-	bool CreateGeometryBuffer(size_t _maxVertexCount);
+	bool CreateGeometryBuffer(	const std::vector<TexturedQuadsProblem::Vertex>& _vertices,
+								const std::vector<TexturedQuadsProblem::Index>& _indices);
 	bool CreateCommandList();
 };

@@ -46,6 +46,9 @@
 #endif
 
 #if WITH_D3D12
+#	include "solutions/texturedquads/d3d12/naive.h"
+#	include "solutions/texturedquads/d3d12/multithread.h"
+#	include "solutions/texturedquads/d3d12/notex.h"
 #	include "solutions/dynamicstreaming/d3d12/map.h"
 #	include "solutions/dynamicstreaming/d3d12/multithread.h"
 #	include "solutions/untexturedobjects/d3d12/setconstants.h"
@@ -158,7 +161,11 @@ ProblemFactory::ProblemFactory(bool _skipInit)
         #if WITH_D3D11
             mSolutions[mProblems.back()->GetName()].push_back(new TexturedQuadsD3D11Naive());
         #endif
-
+		#if WITH_D3D12
+			mSolutions[mProblems.back()->GetName()].push_back(new TexturedQuadsD3D12Naive());
+			//mSolutions[mProblems.back()->GetName()].push_back(new TexturedQuadsD3D12MultiThread());	to be implemented
+			mSolutions[mProblems.back()->GetName()].push_back(new TexturedQuadsD3D12Notex());
+		#endif
     } else {
         newProb->Shutdown();
         SafeDelete(newProb);

@@ -131,6 +131,10 @@ if( apitest_WITH_D3D12 )
 
 		solutions/dynamicstreaming/d3d12/map.cpp
 		solutions/dynamicstreaming/d3d12/multithread.cpp
+
+		solutions/texturedquads/d3d12/naive.cpp
+		solutions/texturedquads/d3d12/multithread.cpp
+		solutions/texturedquads/d3d12/notex.cpp
 	)
 endif( apitest_WITH_D3D12 )
 
@@ -353,6 +357,18 @@ source_group( "Solutions\\UntexturedObjects" FILES
 )
 
 if( apitest_WITH_D3D12 )
+source_group( "Solutions\\TexturedQuads\\D3D12\\Naive" FILES
+	solutions/texturedquads/d3d12/naive.cpp
+	solutions/texturedquads/d3d12/naive.h
+)
+source_group( "Solutions\\TexturedQuads\\D3D12\\MultiThread" FILES
+	solutions/texturedquads/d3d12/multithread.cpp
+	solutions/texturedquads/d3d12/multithread.h
+)
+source_group( "Solutions\\TexturedQuads\\D3D12\\Notex(SOL)" FILES
+	solutions/texturedquads/d3d12/notex.cpp
+	solutions/texturedquads/d3d12/notex.h
+)
 source_group( "Solutions\\DynamicStreaming\\D3D12\\Map" FILES
 	solutions/dynamicstreaming/d3d12/map.cpp
 	solutions/dynamicstreaming/d3d12/map.h

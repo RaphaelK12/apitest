@@ -13,6 +13,8 @@ comptr<ID3D12DescriptorHeap>		g_HeapRTV;
 comptr<ID3D12DescriptorHeap>		g_HeapDSV;
 comptr<ID3D12Resource>				g_BackBuffer;
 comptr<ID3D12Resource>				g_DepthStencilBuffer;
+static comptr<ID3D12CommandAllocator>		g_CopyCommandAllocator;
+static comptr<ID3D12GraphicsCommandList>	g_CopyCommand;
 
 int		g_ClientWidth;
 int		g_ClientHeight;
@@ -89,6 +91,9 @@ void GfxApiDirect3D12::Shutdown()
 
 	g_CommandAllocator.release();
 	g_CommandQueue.release();
+
+	g_CopyCommandAllocator.release();
+	g_CopyCommand.release();
 
 	g_D3D12Device.release();
 	g_dxgi_factory.release();
@@ -278,6 +283,15 @@ HRESULT GfxApiDirect3D12::CreateDefaultCommandQueue()
 	g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, g_CommandAllocator, 0, __uuidof(ID3D12GraphicsCommandList), (void**)&m_EndCommandList);
 	m_EndCommandList->Close();
 
+	// create command queue allocator
+	hr = g_D3D12Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&g_CopyCommandAllocator);
+	if (FAILED(hr))
+		return false;
+
+	// Create Command List
+	g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, g_CopyCommandAllocator, 0, __uuidof(ID3D12GraphicsCommandList), (void**)&g_CopyCommand);
+	g_CopyCommand->Close();
+
 	return S_OK;
 }
 
@@ -317,4 +331,101 @@ void AddResourceBarrier(
 		} },
 	};
 	pCl->ResourceBarrier(1, &barrierDesc);
+}
+
+ID3D12Resource* NewTextureFromDetails(const TextureDetails& _texDetails)
+{
+	ID3D12Resource*	texture = 0;
+
+	// get the current texture desc
+	CD3D12_RESOURCE_DESC texDesc(
+		D3D12_RESOURCE_DIMENSION_TEXTURE_2D,
+		0,		// alignment
+		_texDetails.dwWidth, _texDetails.dwHeight, 1,
+		_texDetails.szMipMapCount,
+		(DXGI_FORMAT)_texDetails.d3dFormat,
+		1, 0,	// sample count/quality
+		D3D12_TEXTURE_LAYOUT_UNKNOWN,
+		D3D12_RESOURCE_MISC_NONE);
+
+	// create the default texture
+	HRESULT hr = g_D3D12Device->CreateCommittedResource(
+		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+		D3D12_HEAP_MISC_NONE,
+		&texDesc,
+		D3D12_RESOURCE_USAGE_INITIAL,
+		nullptr,
+		__uuidof(ID3D12Resource),
+		(void**)&texture);
+	if (FAILED(hr))
+		return 0;
+
+	UINT64 uploadBufferSize;
+	{
+		const UINT num2DSubresources = texDesc.DepthOrArraySize * texDesc.MipLevels;
+		D3D12_RESOURCE_DESC Desc = texture->GetDesc();
+		ID3D12Device* pDevice;
+		texture->GetDevice(__uuidof(*pDevice), reinterpret_cast<void**>(&pDevice));
+		pDevice->GetCopyableLayout(&Desc, 0, num2DSubresources, 0, nullptr, nullptr, nullptr, &uploadBufferSize);
+		pDevice->Release();
+	}
+
+	// create an intermediate upload heap
+	const UINT num2DSubresources = texDesc.DepthOrArraySize * texDesc.MipLevels;
+	comptr<ID3D12Resource>	uploadTex;
+	hr = g_D3D12Device->CreateCommittedResource(
+		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+		D3D12_HEAP_MISC_NONE,
+		&CD3D12_RESOURCE_DESC::Buffer(uploadBufferSize),
+		D3D12_RESOURCE_USAGE_GENERIC_READ,
+		nullptr,
+		__uuidof(ID3D12Resource),
+		(void**)&uploadTex);
+	if (FAILED(hr))
+	{
+		texture->Release();
+		return 0;
+	}
+
+	// copy data to the intermediate upload heap and then schedule a copy from the upload heap to the default texture
+	D3D12_SUBRESOURCE_DATA texResource = {};
+	texResource.pData = static_cast<const void*>(_texDetails.pPixels);
+	texResource.RowPitch = _texDetails.pPitches[0];
+	texResource.SlicePitch = 0;
+
+	size_t accumulatedMipOffset = 0;
+	std::vector<D3D12_SUBRESOURCE_DATA> initialDatas;
+	for (UINT mip = 0; mip < texDesc.MipLevels; ++mip) {
+		D3D12_SUBRESOURCE_DATA mipData;
+		mipData.pData = &((unsigned char*)_texDetails.pPixels)[accumulatedMipOffset];
+		mipData.RowPitch = _texDetails.pPitches[mip];
+		mipData.SlicePitch = 0;
+
+		initialDatas.push_back(mipData);
+		// Bump the mip offset for the next level.
+		accumulatedMipOffset += _texDetails.pSizes[mip];
+	}
+
+	g_CopyCommandAllocator->Reset();
+	g_CopyCommand->Reset(g_CopyCommandAllocator, 0);
+
+	AddResourceBarrier(g_CopyCommand, texture, D3D12_RESOURCE_USAGE_INITIAL, D3D12_RESOURCE_USAGE_COPY_DEST);
+	UpdateSubresources(g_CopyCommand, texture, uploadTex, 0, 0, num2DSubresources, initialDatas.data());
+	AddResourceBarrier(g_CopyCommand, texture, D3D12_RESOURCE_USAGE_COPY_DEST, D3D12_RESOURCE_USAGE_PIXEL_SHADER_RESOURCE);
+
+	g_CopyCommand->Close();
+
+	g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&g_CopyCommand);
+
+	// Make sure everything is flushed out before releasing anything.
+	HANDLE handleEvent = CreateEventEx(nullptr, FALSE, FALSE, EVENT_ALL_ACCESS);
+	g_CommandQueue->Signal(g_FinishFence, ++g_finishFenceValue);
+	g_FinishFence->SetEventOnCompletion(g_finishFenceValue, handleEvent);
+	WaitForSingleObject(handleEvent, INFINITE);
+	CloseHandle(handleEvent);
+
+	// release the upload texture
+	uploadTex.release();
+
+	return texture;
 }

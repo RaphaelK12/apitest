@@ -56,6 +56,9 @@ void AddResourceBarrier(
 	D3D12_RESOURCE_USAGE usageBefore,
 	D3D12_RESOURCE_USAGE usageAfter);
 
+// Load texture
+ID3D12Resource* NewTextureFromDetails(const TextureDetails& _texDetails);
+
 template <typename T>
 ID3D12Resource* CreateBufferFromVector(const std::vector<T>& _data, ID3D12Heap* heap, UINT64 offset )
 {
