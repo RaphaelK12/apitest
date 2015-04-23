@@ -50,10 +50,6 @@ private:
 	comptr<ID3D12GraphicsCommandList>	m_CommandList[NUM_ACCUMULATED_FRAMES][NUM_EXT_THREAD];
 	bool								m_ThreadEnded;
 
-	int									m_ContextId;
-
-	UINT64								m_curFenceValue[NUM_ACCUMULATED_FRAMES];
-
 	bool CreatePSO();
 	bool CreateGeometryBuffer(	const std::vector<UntexturedObjectsProblem::Vertex>& _vertices,
 								const std::vector<UntexturedObjectsProblem::Index>& _indices);

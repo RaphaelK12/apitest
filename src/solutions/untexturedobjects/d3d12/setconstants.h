@@ -40,9 +40,6 @@ private:
 	comptr<ID3D12CommandAllocator>		m_CommandAllocator[NUM_ACCUMULATED_FRAMES];
 	comptr<ID3D12GraphicsCommandList>	m_CommandList[NUM_ACCUMULATED_FRAMES];
 
-	UINT64								m_curFenceValue[NUM_ACCUMULATED_FRAMES];
-	int									m_ContextId;
-
 	bool CreatePSO();
 	bool CreateGeometryBuffer(	const std::vector<UntexturedObjectsProblem::Vertex>& _vertices,
 								const std::vector<UntexturedObjectsProblem::Index>& _indices);

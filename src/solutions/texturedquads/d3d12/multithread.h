@@ -49,9 +49,6 @@ private:
 	comptr<ID3D12CommandAllocator>		m_CommandAllocator[NUM_ACCUMULATED_FRAMES][NUM_EXT_THREAD];
 	comptr<ID3D12GraphicsCommandList>	m_CommandList[NUM_ACCUMULATED_FRAMES][NUM_EXT_THREAD];
 
-	UINT64								m_curFenceValue[NUM_ACCUMULATED_FRAMES];
-	int									m_ContextId;
-
 	int									m_SRVDescriptorSize;
 	int									m_SamplerDescriptorSize;
 

@@ -30,8 +30,9 @@ public:
 protected:
 	comptr<IDXGISwapChain>				m_SwapChain;
 
-	comptr<ID3D12GraphicsCommandList>	m_BeginCommandList;
-	comptr<ID3D12GraphicsCommandList>	m_EndCommandList;
+	comptr<ID3D12GraphicsCommandList>	m_BeginCommandList[NUM_ACCUMULATED_FRAMES];
+	comptr<ID3D12GraphicsCommandList>	m_EndCommandList[NUM_ACCUMULATED_FRAMES];
+	UINT64								m_curFenceValue[NUM_ACCUMULATED_FRAMES];
 
 	// Create Swap Chain
 	bool CreateSwapChain();

@@ -11,6 +11,7 @@ extern comptr<ID3D12Resource>				g_BackBuffer;
 extern comptr<ID3D12CommandQueue>			g_CommandQueue;
 extern int	g_ClientWidth;
 extern int	g_ClientHeight;
+extern int	g_curContext;
 
 // Finish fence
 extern comptr<ID3D12Fence> g_FinishFence;
@@ -30,10 +31,7 @@ DynamicStreamingD3D12Map::~DynamicStreamingD3D12Map()
 // --------------------------------------------------------------------------------------------------------------------
 bool DynamicStreamingD3D12Map::Init(size_t _maxVertexCount)
 {
-	m_ContextId = 0;
 	m_VertexData = 0;
-	for (size_t i = 0; i < NUM_ACCUMULATED_FRAMES; ++i)
-		m_curFenceValue[i] = 0;
 
 	if (!CreatePSO())
 		return false;
@@ -50,17 +48,7 @@ bool DynamicStreamingD3D12Map::Init(size_t _maxVertexCount)
 // --------------------------------------------------------------------------------------------------------------------
 void DynamicStreamingD3D12Map::Render(const std::vector<Vec2>& _vertices)
 {
-	// Check out fence
-	const UINT64 lastCompletedFence = g_FinishFence->GetCompletedValue();
-	if (m_curFenceValue[m_ContextId] > lastCompletedFence)
-	{
-		HANDLE handleEvent = CreateEventEx(nullptr, FALSE, FALSE, EVENT_ALL_ACCESS);
-		g_FinishFence->SetEventOnCompletion(m_curFenceValue[m_ContextId], handleEvent);
-		WaitForSingleObject(handleEvent, INFINITE);
-		CloseHandle(handleEvent);
-	}
-
-	if (FAILED(m_CommandAllocator[m_ContextId]->Reset()))
+	if (FAILED(m_CommandAllocator[g_curContext]->Reset()))
 		return;
 
 	Constants cb;
@@ -73,28 +61,28 @@ void DynamicStreamingD3D12Map::Render(const std::vector<Vec2>& _vertices)
 	// Create Command List first time invoked
 	{
 		// Reset command list
-		m_CommandList[m_ContextId]->Reset(m_CommandAllocator[m_ContextId], m_PipelineState);
+		m_CommandList[g_curContext]->Reset(m_CommandAllocator[g_curContext], m_PipelineState);
 
 		// Setup root signature
-		m_CommandList[m_ContextId]->SetGraphicsRootSignature(m_RootSignature);
+		m_CommandList[g_curContext]->SetGraphicsRootSignature(m_RootSignature);
 
 		// Setup viewport
 		D3D12_VIEWPORT viewport = { 0, 0, FLOAT(g_ClientWidth), FLOAT(g_ClientHeight), 0.0f, 1.0f };
-		m_CommandList[m_ContextId]->RSSetViewports(1, &viewport);
+		m_CommandList[g_curContext]->RSSetViewports(1, &viewport);
 
 		// Setup scissor
 		D3D12_RECT scissorRect = { 0, 0, g_ClientWidth, g_ClientHeight };
-		m_CommandList[m_ContextId]->RSSetScissorRects(1, &scissorRect);
+		m_CommandList[g_curContext]->RSSetScissorRects(1, &scissorRect);
 
 		// Set Render Target
-		m_CommandList[m_ContextId]->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
+		m_CommandList[g_curContext]->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
 
 		// Draw the triangle
-		m_CommandList[m_ContextId]->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		m_CommandList[m_ContextId]->SetVertexBuffers(0, &m_VertexBufferView, 1);
+		m_CommandList[g_curContext]->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		m_CommandList[g_curContext]->SetVertexBuffers(0, &m_VertexBufferView, 1);
 
 		// Set constant
-		m_CommandList[m_ContextId]->SetGraphicsRoot32BitConstants(1, &cb, 0, 16);
+		m_CommandList[g_curContext]->SetGraphicsRoot32BitConstants(0, &cb, 0, 8);
 
 		// draw command
 		size_t memOffset = 0;
@@ -104,7 +92,7 @@ void DynamicStreamingD3D12Map::Render(const std::vector<Vec2>& _vertices)
 			memcpy(m_VertexData + kOffsetInBytes + memOffset, ((UINT8*)_vertices.data()) + memOffset, kPerticleInBytes);
 
 			// issue draw command
-			m_CommandList[m_ContextId]->DrawInstanced(kVertsPerParticle, 1, kOffsetInVertices + vertOfset, 0);
+			m_CommandList[g_curContext]->DrawInstanced(kVertsPerParticle, 1, kOffsetInVertices + vertOfset, 0);
 
 			// update offset
 			memOffset += kPerticleInBytes;
@@ -112,16 +100,10 @@ void DynamicStreamingD3D12Map::Render(const std::vector<Vec2>& _vertices)
 		}
 
 		// close the command list
-		m_CommandList[m_ContextId]->Close();
+		m_CommandList[g_curContext]->Close();
 	}
 
-	g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&m_CommandList[m_ContextId]);
-
-	// setup fence
-	m_curFenceValue[m_ContextId] = ++g_finishFenceValue;
-	g_CommandQueue->Signal(g_FinishFence, g_finishFenceValue);
-
-	m_ContextId = (m_ContextId + 1) % NUM_ACCUMULATED_FRAMES;
+	g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&m_CommandList[g_curContext]);
 }
 
 // --------------------------------------------------------------------------------------------------------------------
@@ -191,6 +173,7 @@ bool DynamicStreamingD3D12Map::CreatePSO()
 	psod.InputLayout = { inputLayout, numInputLayoutElements };
 	psod.IndexBufferProperties = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
 	psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+	psod.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
 	return SUCCEEDED(g_D3D12Device->CreateGraphicsPipelineState(&psod, __uuidof(ID3D12PipelineState), (void**)&m_PipelineState));
 }
@@ -236,8 +219,8 @@ bool DynamicStreamingD3D12Map::CreateGeometryBuffer(size_t _maxVertexCount)
 	kVertexSizeBytes = sizeof(Vec2);
 	kParticleCount = _maxVertexCount / kVertsPerParticle;
 	kTotalVertices = _maxVertexCount;
-	kOffsetInBytes = m_BufferSize * m_ContextId;
-	kOffsetInVertices = kTotalVertices * m_ContextId;
+	kOffsetInBytes = m_BufferSize * g_curContext;
+	kOffsetInVertices = kTotalVertices * g_curContext;
 	kPerticleInBytes = kVertsPerParticle * kVertexSizeBytes;
 
 	return true;

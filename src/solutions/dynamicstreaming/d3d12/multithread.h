@@ -40,16 +40,12 @@ private:
 	HANDLE								m_ThreadEndEvent[NUM_EXT_THREAD];
 	bool								m_ThreadEnded;
 
-	UINT64								m_curFenceValue[NUM_ACCUMULATED_FRAMES];
-	int									m_ContextId;
 	UINT8*								m_VertexData;
 	
 	size_t								m_BufferSize;
 	size_t								kVertexSizeBytes;
 	size_t								kParticleCount;
 	size_t								kTotalVertices;
-	size_t								kOffsetInBytes;
-	size_t								kOffsetInVertices;
 	size_t								kPerticleInBytes;
 
 	Constants							m_ConstantData;

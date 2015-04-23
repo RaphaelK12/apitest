@@ -10,6 +10,7 @@ extern comptr<ID3D12Resource>				g_BackBuffer;
 extern comptr<ID3D12CommandQueue>			g_CommandQueue;
 extern int	g_ClientWidth;
 extern int	g_ClientHeight;
+extern int	g_curContext;
 
 // Finish fence
 extern comptr<ID3D12Fence> g_FinishFence;
@@ -28,9 +29,6 @@ bool TexturedQuadsD3D12MultiThread::Init(const std::vector<TexturedQuadsProblem:
 	const std::vector<TextureDetails*>& _textures,
 	size_t _objectCount)
 {
-	m_ContextId = 0;
-	for (size_t i = 0; i < NUM_ACCUMULATED_FRAMES; ++i)
-		m_curFenceValue[i] = 0;
 	m_ThreadEnded = false;
 	m_Transforms = 0;
 	m_ObjectCount = _objectCount;
@@ -56,16 +54,6 @@ bool TexturedQuadsD3D12MultiThread::Init(const std::vector<TexturedQuadsProblem:
 // --------------------------------------------------------------------------------------------------------------------
 void TexturedQuadsD3D12MultiThread::Render(const std::vector<Matrix>& _transforms)
 {
-	// Check out fence
-	const UINT64 lastCompletedFence = g_FinishFence->GetCompletedValue();
-	if (m_curFenceValue[m_ContextId] > lastCompletedFence)
-	{
-		HANDLE handleEvent = CreateEventEx(nullptr, FALSE, FALSE, EVENT_ALL_ACCESS);
-		g_FinishFence->SetEventOnCompletion(m_curFenceValue[m_ContextId], handleEvent);
-		WaitForSingleObject(handleEvent, INFINITE);
-		CloseHandle(handleEvent);
-	}
-
 	// Program
 	Vec3 dir = { 0, 0, 1 };
 	Vec3 at = { 0, 0, 0 };
@@ -79,13 +67,7 @@ void TexturedQuadsD3D12MultiThread::Render(const std::vector<Matrix>& _transform
 		SetEvent(m_ThreadBeginEvent[i]);
 	WaitForMultipleObjects(NUM_EXT_THREAD, m_ThreadEndEvent, TRUE, INFINITE);
 	
-	g_CommandQueue->ExecuteCommandLists(NUM_EXT_THREAD, (ID3D12CommandList* const*)m_CommandList[m_ContextId]);
-
-	// setup fence
-	m_curFenceValue[m_ContextId] = ++g_finishFenceValue;
-	g_CommandQueue->Signal(g_FinishFence, g_finishFenceValue);
-
-	m_ContextId = (m_ContextId + 1) % NUM_ACCUMULATED_FRAMES;
+	g_CommandQueue->ExecuteCommandLists(NUM_EXT_THREAD, (ID3D12CommandList* const*)m_CommandList[g_curContext]);
 }
 
 // --------------------------------------------------------------------------------------------------------------------
@@ -187,6 +169,7 @@ bool TexturedQuadsD3D12MultiThread::CreatePSO()
 	psod.InputLayout = { inputLayout, numInputLayoutElements };
 	psod.IndexBufferProperties = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
 	psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+	psod.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
 	return SUCCEEDED(g_D3D12Device->CreateGraphicsPipelineState(&psod, __uuidof(ID3D12PipelineState), (void**)&m_PipelineState));
 }
@@ -391,37 +374,37 @@ void TexturedQuadsD3D12MultiThread::renderMultiThread(int tid)
 
 void TexturedQuadsD3D12MultiThread::RenderPart(int pid, int total)
 {
-	if (FAILED(m_CommandAllocator[m_ContextId][pid]->Reset()))
+	if (FAILED(m_CommandAllocator[g_curContext][pid]->Reset()))
 		return;
 
 	// Reset command list
-	m_CommandList[m_ContextId][pid]->Reset(m_CommandAllocator[m_ContextId][pid], m_PipelineState);
+	m_CommandList[g_curContext][pid]->Reset(m_CommandAllocator[g_curContext][pid], m_PipelineState);
 
 	// Setup root signature
-	m_CommandList[m_ContextId][pid]->SetGraphicsRootSignature(m_RootSignature);
+	m_CommandList[g_curContext][pid]->SetGraphicsRootSignature(m_RootSignature);
 
 	// Setup viewport
 	D3D12_VIEWPORT viewport = { 0, 0, FLOAT(g_ClientWidth), FLOAT(g_ClientHeight), 0.0f, 1.0f };
-	m_CommandList[m_ContextId][pid]->RSSetViewports(1, &viewport);
+	m_CommandList[g_curContext][pid]->RSSetViewports(1, &viewport);
 
 	// Setup scissor
 	D3D12_RECT scissorRect = { 0, 0, g_ClientWidth, g_ClientHeight };
-	m_CommandList[m_ContextId][pid]->RSSetScissorRects(1, &scissorRect);
+	m_CommandList[g_curContext][pid]->RSSetScissorRects(1, &scissorRect);
 
 	// Set Render Target
-	m_CommandList[m_ContextId][pid]->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
+	m_CommandList[g_curContext][pid]->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
 
 	// Draw the triangle
-	m_CommandList[m_ContextId][pid]->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	m_CommandList[m_ContextId][pid]->SetVertexBuffers(0, &m_VertexBufferView, 1);
-	m_CommandList[m_ContextId][pid]->SetIndexBuffer(&m_IndexBufferView);
+	m_CommandList[g_curContext][pid]->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	m_CommandList[g_curContext][pid]->SetVertexBuffers(0, &m_VertexBufferView, 1);
+	m_CommandList[g_curContext][pid]->SetIndexBuffer(&m_IndexBufferView);
 
 	ID3D12DescriptorHeap*	heaps[2] = { m_SRVHeap, m_SamplerHeap };
-	m_CommandList[m_ContextId][pid]->SetDescriptorHeaps(heaps, 2);
+	m_CommandList[g_curContext][pid]->SetDescriptorHeaps(heaps, 2);
 
-	m_CommandList[m_ContextId][pid]->SetGraphicsRoot32BitConstants(1, &m_ViewProjection, 0, 16);
-	m_CommandList[m_ContextId][pid]->SetGraphicsRootDescriptorTable(2, m_SRVHeap->GetGPUDescriptorHandleForHeapStart());
-	m_CommandList[m_ContextId][pid]->SetGraphicsRootDescriptorTable(3, m_SamplerHeap->GetGPUDescriptorHandleForHeapStart());
+	m_CommandList[g_curContext][pid]->SetGraphicsRoot32BitConstants(1, &m_ViewProjection, 0, 16);
+	m_CommandList[g_curContext][pid]->SetGraphicsRootDescriptorTable(2, m_SRVHeap->GetGPUDescriptorHandleForHeapStart());
+	m_CommandList[g_curContext][pid]->SetGraphicsRootDescriptorTable(3, m_SamplerHeap->GetGPUDescriptorHandleForHeapStart());
 
 	size_t start = m_ObjectCount / total * pid;
 	size_t end = start + m_ObjectCount / total;
@@ -431,8 +414,8 @@ void TexturedQuadsD3D12MultiThread::RenderPart(int pid, int total)
 	for (unsigned int u = start; u < end; ++u) {
 		perDrawData.World = m_Transforms[u];
 		perDrawData.InstanceId = u;
-		m_CommandList[m_ContextId][pid]->SetGraphicsRoot32BitConstants(0, &perDrawData, 0, 17);
-		m_CommandList[m_ContextId][pid]->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, u);
+		m_CommandList[g_curContext][pid]->SetGraphicsRoot32BitConstants(0, &perDrawData, 0, 17);
+		m_CommandList[g_curContext][pid]->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, u);
 	}
-	m_CommandList[m_ContextId][pid]->Close();
+	m_CommandList[g_curContext][pid]->Close();
 }
