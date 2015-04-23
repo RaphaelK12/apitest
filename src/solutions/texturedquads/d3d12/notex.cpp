@@ -166,6 +166,7 @@ bool TexturedQuadsD3D12Notex::CreatePSO()
 	psod.InputLayout = { inputLayout, numInputLayoutElements };
 	psod.IndexBufferProperties = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
 	psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+	psod.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
 	return SUCCEEDED(g_D3D12Device->CreateGraphicsPipelineState(&psod, __uuidof(ID3D12PipelineState), (void**)&m_PipelineState));
 }
