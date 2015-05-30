@@ -48,18 +48,17 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreatePSO()
 	comptr<ID3DBlob> psCode = CompileShader(L"cubes_d3d12_naive_ps.hlsl", "psMain", "ps_5_0");
 
 	// Create Root signature
-	D3D12_DESCRIPTOR_RANGE descRanges[1];
-	descRanges[0].Init(D3D12_DESCRIPTOR_RANGE_CBV, 1, 0);
-
 	D3D12_ROOT_PARAMETER rootParameters[2];
-	//rootParameters[0].InitAsConstantBufferView(0);
-	//rootParameters[0].InitAsDescriptorTable(1, descRanges);
-	rootParameters[0].InitAsConstants(16, 0);
-	rootParameters[1].InitAsConstants(16, 1);
+	memset(rootParameters, 0, sizeof(rootParameters));
+	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+	rootParameters[0].Constants.Num32BitValues = 16;
+	rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+	rootParameters[1].Constants.Num32BitValues = 16;
+	rootParameters[1].Constants.ShaderRegister = 1;
 
-	D3D12_ROOT_SIGNATURE rootSig = { 2, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
+	D3D12_ROOT_SIGNATURE_DESC rootSig = { 2, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
 	ID3DBlob* pBlobRootSig, *pBlobErrors;
-	HRESULT hr = (D3D12SerializeRootSignature(&rootSig, D3D_ROOT_SIGNATURE_V1, &pBlobRootSig, &pBlobErrors));
+	HRESULT hr = (D3D12SerializeRootSignature(&rootSig, D3D_ROOT_SIGNATURE_VERSION_1, &pBlobRootSig, &pBlobErrors));
 	if (FAILED(hr))
 		return false;
 
@@ -69,8 +68,8 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreatePSO()
 
 	const D3D12_INPUT_ELEMENT_DESC inputLayout[] =
 	{
-		{ "ObjPos", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_PER_VERTEX_DATA, 0 },
-		{ "Color", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_PER_VERTEX_DATA, 0 },
+		{ "ObjPos", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "Color", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 	};
 	const UINT numInputLayoutElements = sizeof(inputLayout) / sizeof(inputLayout[0]);
 
@@ -82,8 +81,8 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreatePSO()
 	psod.VS.pShaderBytecode = vsCode->GetBufferPointer();
 	psod.PS.BytecodeLength = psCode->GetBufferSize();
 	psod.PS.pShaderBytecode = psCode->GetBufferPointer();
-	psod.RasterizerState.FillMode = D3D12_FILL_SOLID;
-	psod.RasterizerState.CullMode = D3D12_CULL_NONE;
+	psod.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+	psod.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 	psod.RasterizerState.FrontCounterClockwise = true;
 	psod.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 	psod.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -92,10 +91,10 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreatePSO()
 	psod.NumRenderTargets = 1;
 	psod.SampleMask = UINT_MAX;
 	psod.InputLayout = { inputLayout, numInputLayoutElements };
-	psod.IndexBufferProperties = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
-	psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+	psod.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
+	psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC();
 	psod.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-
+	
 	return SUCCEEDED(g_D3D12Device->CreateGraphicsPipelineState(&psod, __uuidof(ID3D12PipelineState), (void**)&m_PipelineState));
 }
 
@@ -105,7 +104,7 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreateGeometryBuffer(const std::vect
 	const size_t size = 65536 * 256;
 
 	if (FAILED(g_D3D12Device->CreateHeap(
-		&CD3D12_HEAP_DESC(size, D3D12_HEAP_TYPE_UPLOAD, 0, D3D12_HEAP_MISC_DENY_TEXTURES),
+		&CD3D12_HEAP_DESC(size, CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD), 0, (D3D12_HEAP_FLAGS)(D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES | D3D12_HEAP_FLAG_DENY_NON_RT_DS_TEXTURES)),
 		__uuidof(ID3D12Heap),
 		reinterpret_cast<void**>(&m_GeometryBufferHeap))))
 		return false;
@@ -119,7 +118,7 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreateGeometryBuffer(const std::vect
 
 	m_VertexBufferView = D3D12_VERTEX_BUFFER_VIEW{ m_VertexBuffer->GetGPUVirtualAddress(), sizeof(UntexturedObjectsProblem::Vertex) * _vertices.size(), sizeof(UntexturedObjectsProblem::Vertex) };
 	m_IndexBufferView = D3D12_INDEX_BUFFER_VIEW{ m_IndexBuffer->GetGPUVirtualAddress(), sizeof(UntexturedObjectsProblem::Index) * _indices.size(), DXGI_FORMAT_R16_UINT };
-
+	
 	return true;
 }
 
@@ -127,13 +126,13 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreateCommandSignature()
 {
 	// It doesn't work here somehow, maybe come back later
 	// Updating Constant through set32bitsconstant parameter works here, however it requires updating the buffer every frame.
-	D3D12_INDIRECT_PARAMETER para[3];
+	/*D3D12_INDIRECT_PARAMETER para[3];
 	memset(para, 0, sizeof(para));
-	/*para[0].Type = D3D12_INDIRECT_PARAMETER_CONSTANT;
+	para[0].Type = D3D12_INDIRECT_PARAMETER_CONSTANT;
 	para[0].Constant.RootParameterIndex = 1;
 	para[0].Constant.DestOffsetIn32BitValues = 0;
 	para[0].Constant.Num32BitValuesToSet = 16;
-	para[1].Type = D3D12_INDIRECT_PARAMETER_DRAW_INDEXED;*/
+	para[1].Type = D3D12_INDIRECT_PARAMETER_DRAW_INDEXED;
 	para[0].Type = D3D12_INDIRECT_PARAMETER_CONSTANT_BUFFER_VIEW;
 	para[0].ConstantBufferView.RootParameterIndex = 0;
 	para[1].Type = D3D12_INDIRECT_PARAMETER_CONSTANT;
@@ -150,8 +149,8 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreateCommandSignature()
 
 	if (FAILED(g_D3D12Device->CreateCommandSignature(&desc, m_RootSignature, __uuidof(ID3D12CommandSignature), reinterpret_cast<void**>(&m_CommandSig))))
 		return false;
-
-	return true;
+	*/
+	return false;
 }
 
 bool UntexturedObjectsD3D12ExecuteIndirect::CreateConstantBuffer(size_t count)
@@ -159,9 +158,9 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreateConstantBuffer(size_t count)
 	// Create a (large) constant buffer
 	if (FAILED(g_D3D12Device->CreateCommittedResource(
 		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-		D3D12_HEAP_MISC_NONE,
+		D3D12_HEAP_FLAG_NONE,
 		&CD3D12_RESOURCE_DESC::Buffer(count * D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT),
-		D3D12_RESOURCE_USAGE_GENERIC_READ,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
 		__uuidof(ID3D12Resource),
 		reinterpret_cast<void**>(&m_ConstantBuffer))))
@@ -170,7 +169,7 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreateConstantBuffer(size_t count)
 	}
 
 	m_ConstantBuffer->Map(0, nullptr, reinterpret_cast<void**>(&m_ConstantBufferData));
-
+	
 	return true;
 }
 
@@ -237,17 +236,17 @@ void UntexturedObjectsD3D12ExecuteIndirect::Render(const std::vector<Matrix>& _t
 		m_CommandList->RSSetScissorRects(1, &scissorRect);
 
 		// Set Render Target
-		m_CommandList->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
+		m_CommandList->OMSetRenderTargets(1, &g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
 
 		// Setup pipeline state
 		m_CommandList->SetPipelineState(m_PipelineState);
 
 		// Draw the triangle
 		m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		m_CommandList->SetVertexBuffers(0, &m_VertexBufferView, 1);
-		m_CommandList->SetIndexBuffer(&m_IndexBufferView);
+		m_CommandList->IASetVertexBuffers(0, 1, &m_VertexBufferView);
+		m_CommandList->IASetIndexBuffer(&m_IndexBufferView);
 
-		m_CommandList->SetGraphicsRoot32BitConstants(1, &vp, 0, 16);
+		m_CommandList->SetGraphicsRoot32BitConstants(1, 16, &vp, 0);
 
 		m_CommandList->ExecuteIndirect(m_CommandSig, count / 2, m_CommandBuffer, 0, 0, 0);
 		/*

@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Project ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\jerry\Documents\apitest\src\CMakeLists.txt" />
+    <CustomBuild Include="C:\Users\jerry\Documents\apitest\vs2013\CMakeFiles\a2e157caf18530e6bf8e054f0cefdddf\CopyRedist46.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="C:\Users\jerry\Documents\apitest\vs2013\src\CMakeFiles\CopyRedist46" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{37F13BA8-1BE3-42D8-82F3-8E25E110EB24}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

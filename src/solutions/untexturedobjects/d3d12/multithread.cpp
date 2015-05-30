@@ -48,12 +48,16 @@ bool UntexturedObjectsD3D12MultiThread::CreatePSO()
 	comptr<ID3DBlob> psCode = CompileShader(L"cubes_d3d12_naive_ps.hlsl", "psMain", "ps_5_0");
 
 	D3D12_ROOT_PARAMETER rootParameters[2];
-	rootParameters[0].InitAsConstants(16, 0);
-	rootParameters[1].InitAsConstants(16, 1);
+	memset(rootParameters, 0, sizeof(rootParameters));
+	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+	rootParameters[0].Constants.Num32BitValues = 16;
+	rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+	rootParameters[1].Constants.Num32BitValues = 16;
+	rootParameters[1].Constants.ShaderRegister = 1;
 
-	D3D12_ROOT_SIGNATURE rootSig = { 2, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
+	D3D12_ROOT_SIGNATURE_DESC rootSig = { 2, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
 	ID3DBlob* pBlobRootSig, *pBlobErrors;
-	HRESULT hr = (D3D12SerializeRootSignature(&rootSig, D3D_ROOT_SIGNATURE_V1, &pBlobRootSig, &pBlobErrors));
+	HRESULT hr = (D3D12SerializeRootSignature(&rootSig, D3D_ROOT_SIGNATURE_VERSION_1, &pBlobRootSig, &pBlobErrors));
 	if (FAILED(hr))
 		return false;
 
@@ -63,8 +67,8 @@ bool UntexturedObjectsD3D12MultiThread::CreatePSO()
 
 	const D3D12_INPUT_ELEMENT_DESC inputLayout[] =
 	{
-		{ "ObjPos", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_PER_VERTEX_DATA, 0 },
-		{ "Color", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_PER_VERTEX_DATA, 0 },
+		{ "ObjPos", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "Color", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 	};
 	const UINT numInputLayoutElements = sizeof(inputLayout) / sizeof(inputLayout[0]);
 
@@ -76,8 +80,8 @@ bool UntexturedObjectsD3D12MultiThread::CreatePSO()
 	psod.VS.pShaderBytecode = vsCode->GetBufferPointer();
 	psod.PS.BytecodeLength = psCode->GetBufferSize();
 	psod.PS.pShaderBytecode = psCode->GetBufferPointer();
-	psod.RasterizerState.FillMode = D3D12_FILL_SOLID;
-	psod.RasterizerState.CullMode = D3D12_CULL_NONE;
+	psod.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+	psod.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 	psod.RasterizerState.FrontCounterClockwise = true;
 	psod.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 	psod.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -86,8 +90,8 @@ bool UntexturedObjectsD3D12MultiThread::CreatePSO()
 	psod.NumRenderTargets = 1;
 	psod.SampleMask = UINT_MAX;
 	psod.InputLayout = { inputLayout, numInputLayoutElements };
-	psod.IndexBufferProperties = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
-	psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+	psod.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
+	psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC();
 	psod.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
 	if (FAILED(g_D3D12Device->CreateGraphicsPipelineState(&psod, __uuidof(ID3D12PipelineState), (void**)&m_PipelineState)))
@@ -104,12 +108,12 @@ bool UntexturedObjectsD3D12MultiThread::CreateGeometryBuffer(const std::vector<U
 	const size_t sizeofIndex = sizeof(UntexturedObjectsProblem::Index);
 	const size_t sizeofIndices = sizeofIndex * _indices.size();
 	const size_t totalSize = sizeofIndices + sizeofIndices;
-
+	
 	if (FAILED(g_D3D12Device->CreateCommittedResource(
 		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-		D3D12_HEAP_MISC_NONE,
+		D3D12_HEAP_FLAG_NONE,
 		&CD3D12_RESOURCE_DESC::Buffer(totalSize),
-		D3D12_RESOURCE_USAGE_GENERIC_READ,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
 		IID_PPV_ARGS(&m_GeometryBuffer)
 		)))
@@ -125,7 +129,7 @@ bool UntexturedObjectsD3D12MultiThread::CreateGeometryBuffer(const std::vector<U
 
 	m_VertexBufferView = D3D12_VERTEX_BUFFER_VIEW{ m_GeometryBuffer->GetGPUVirtualAddress(), sizeofVertices, sizeofVertex };
 	m_IndexBufferView = D3D12_INDEX_BUFFER_VIEW{ m_GeometryBuffer->GetGPUVirtualAddress() + sizeofVertices, sizeofIndices, DXGI_FORMAT_R16_UINT };
-
+	
 	return true;
 }
 
@@ -293,21 +297,21 @@ void UntexturedObjectsD3D12MultiThread::RenderPart(int pid, int total)
 	m_CommandList[g_curContext][pid]->RSSetScissorRects(1, &scissorRect);
 
 	// Set Render Target
-	m_CommandList[g_curContext][pid]->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
+	m_CommandList[g_curContext][pid]->OMSetRenderTargets(1, &g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
 	
 	// Draw the triangle
 	m_CommandList[g_curContext][pid]->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	m_CommandList[g_curContext][pid]->SetVertexBuffers(0, &m_VertexBufferView, 1);
-	m_CommandList[g_curContext][pid]->SetIndexBuffer(&m_IndexBufferView);
+	m_CommandList[g_curContext][pid]->IASetVertexBuffers(0, 1, &m_VertexBufferView);
+	m_CommandList[g_curContext][pid]->IASetIndexBuffer(&m_IndexBufferView);
 
 	// setup view projection matrix
-	m_CommandList[g_curContext][pid]->SetGraphicsRoot32BitConstants(1, &m_ViewProjection, 0, 16);
+	m_CommandList[g_curContext][pid]->SetGraphicsRoot32BitConstants(1, 16, &m_ViewProjection, 0);
 	
 	size_t start = m_ObjectCount / total * pid;
 	size_t end = start + m_ObjectCount / total;
 	unsigned int counter = 0;
 	for (unsigned int u = start; u < end; ++u) {
-		m_CommandList[g_curContext][pid]->SetGraphicsRoot32BitConstants(0, &(m_Transforms[u]), 0, 16);
+		m_CommandList[g_curContext][pid]->SetGraphicsRoot32BitConstants(0, 16, &(m_Transforms[u]), 0);
 		m_CommandList[g_curContext][pid]->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
 	}
 	

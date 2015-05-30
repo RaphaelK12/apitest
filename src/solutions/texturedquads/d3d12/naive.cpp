@@ -76,17 +76,17 @@ void TexturedQuadsD3D12Naive::Render(const std::vector<Matrix>& _transforms)
 		m_CommandList[g_curContext]->RSSetScissorRects(1, &scissorRect);
 
 		// Set Render Target
-		m_CommandList[g_curContext]->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
+		m_CommandList[g_curContext]->OMSetRenderTargets(1, &g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
 
 		// Draw the triangle
 		m_CommandList[g_curContext]->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		m_CommandList[g_curContext]->SetVertexBuffers(0, &m_VertexBufferView, 1);
-		m_CommandList[g_curContext]->SetIndexBuffer(&m_IndexBufferView);
+		m_CommandList[g_curContext]->IASetVertexBuffers(0, 1, &m_VertexBufferView);
+		m_CommandList[g_curContext]->IASetIndexBuffer(&m_IndexBufferView);
 
 		ID3D12DescriptorHeap*	heaps[2] = { m_SRVHeap, m_SamplerHeap };
-		m_CommandList[g_curContext]->SetDescriptorHeaps(heaps, 2);
+		m_CommandList[g_curContext]->SetDescriptorHeaps(2, heaps);
 
-		m_CommandList[g_curContext]->SetGraphicsRoot32BitConstants(1, &vp, 0, 16);
+		m_CommandList[g_curContext]->SetGraphicsRoot32BitConstants(1, 16, &vp, 0);
 		m_CommandList[g_curContext]->SetGraphicsRootDescriptorTable(2, m_SRVHeap->GetGPUDescriptorHandleForHeapStart());
 		m_CommandList[g_curContext]->SetGraphicsRootDescriptorTable(3, m_SamplerHeap->GetGPUDescriptorHandleForHeapStart());
 
@@ -95,7 +95,7 @@ void TexturedQuadsD3D12Naive::Render(const std::vector<Matrix>& _transforms)
 		for (unsigned int u = 0; u < count; ++u) {
 			perDrawData.World = _transforms[u];
 			perDrawData.InstanceId = u;
-			m_CommandList[g_curContext]->SetGraphicsRoot32BitConstants(0, &perDrawData, 0, 17);
+			m_CommandList[g_curContext]->SetGraphicsRoot32BitConstants(0, 17, &perDrawData, 0);
 			m_CommandList[g_curContext]->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, u);
 		}
 		m_CommandList[g_curContext]->Close();
@@ -145,18 +145,29 @@ bool TexturedQuadsD3D12Naive::CreatePSO()
 	comptr<ID3DBlob> psCode = CompileShader(L"textures_d3d12_naive_ps.hlsl", "psMain", "ps_5_0");
 
 	D3D12_DESCRIPTOR_RANGE descRange[2];
-	descRange[0].Init(D3D12_DESCRIPTOR_RANGE_SRV, 2, 0);
-	descRange[1].Init(D3D12_DESCRIPTOR_RANGE_SAMPLER, 1, 0);
+	memset(&descRange, 0, sizeof(descRange));
+	descRange[0].NumDescriptors = 2;
+	descRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	descRange[1].NumDescriptors = 1;
+	descRange[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
 
 	D3D12_ROOT_PARAMETER rootParameters[4];
-	rootParameters[0].InitAsConstants(17, 0);
-	rootParameters[1].InitAsConstants(16, 1);
-	rootParameters[2].InitAsDescriptorTable(1, &descRange[0], D3D12_SHADER_VISIBILITY_PIXEL);
-	rootParameters[3].InitAsDescriptorTable(1, &descRange[1], D3D12_SHADER_VISIBILITY_PIXEL);
+	memset(rootParameters, 0, sizeof(rootParameters));
+	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+	rootParameters[0].Constants.Num32BitValues = 17;
+	rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+	rootParameters[1].Constants.Num32BitValues = 16;
+	rootParameters[1].Constants.ShaderRegister = 1;
+	rootParameters[2].DescriptorTable.NumDescriptorRanges = 1;
+	rootParameters[2].DescriptorTable.pDescriptorRanges = &descRange[0];
+	rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	rootParameters[3].DescriptorTable.NumDescriptorRanges = 1;
+	rootParameters[3].DescriptorTable.pDescriptorRanges = &descRange[1];
+	rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-	D3D12_ROOT_SIGNATURE rootSig = { 4, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
+	D3D12_ROOT_SIGNATURE_DESC rootSig = { 4, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
 	ID3DBlob* pBlobRootSig, *pBlobErrors;
-	HRESULT hr = (D3D12SerializeRootSignature(&rootSig, D3D_ROOT_SIGNATURE_V1, &pBlobRootSig, &pBlobErrors));
+	HRESULT hr = (D3D12SerializeRootSignature(&rootSig, D3D_ROOT_SIGNATURE_VERSION_1, &pBlobRootSig, &pBlobErrors));
 	if (FAILED(hr))
 		return false;
 
@@ -166,8 +177,8 @@ bool TexturedQuadsD3D12Naive::CreatePSO()
 
 	const D3D12_INPUT_ELEMENT_DESC inputLayout[] =
 	{
-		{ "ObjPos", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_PER_VERTEX_DATA, 0 },
-		{ "TexCoord", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_PER_VERTEX_DATA, 0 },
+		{ "ObjPos", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "TexCoord", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 	};
 	const UINT numInputLayoutElements = sizeof(inputLayout) / sizeof(inputLayout[0]);
 
@@ -179,8 +190,8 @@ bool TexturedQuadsD3D12Naive::CreatePSO()
 	psod.VS.pShaderBytecode = vsCode->GetBufferPointer();
 	psod.PS.BytecodeLength = psCode->GetBufferSize();
 	psod.PS.pShaderBytecode = psCode->GetBufferPointer();
-	psod.RasterizerState.FillMode = D3D12_FILL_SOLID;
-	psod.RasterizerState.CullMode = D3D12_CULL_NONE;
+	psod.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+	psod.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 	psod.RasterizerState.FrontCounterClockwise = true;
 	psod.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 	psod.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -189,8 +200,8 @@ bool TexturedQuadsD3D12Naive::CreatePSO()
 	psod.NumRenderTargets = 1;
 	psod.SampleMask = UINT_MAX;
 	psod.InputLayout = { inputLayout, numInputLayoutElements };
-	psod.IndexBufferProperties = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
-	psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+	psod.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
+	psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC();
 	psod.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
 	return SUCCEEDED(g_D3D12Device->CreateGraphicsPipelineState(&psod, __uuidof(ID3D12PipelineState), (void**)&m_PipelineState));
@@ -222,12 +233,12 @@ bool TexturedQuadsD3D12Naive::CreateGeometryBuffer(const std::vector<TexturedQua
 	const size_t sizeofIndex = sizeof(TexturedQuadsProblem::Index);
 	const size_t sizeofIndices = sizeofIndex * _indices.size();
 	const size_t totalSize = sizeofIndices + sizeofIndices;
-
+	
 	if (FAILED(g_D3D12Device->CreateCommittedResource(
 		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-		D3D12_HEAP_MISC_NONE,
+		D3D12_HEAP_FLAG_NONE,
 		&CD3D12_RESOURCE_DESC::Buffer(totalSize),
-		D3D12_RESOURCE_USAGE_GENERIC_READ,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
 		IID_PPV_ARGS(&m_GeometryBuffer)
 		)))
@@ -243,21 +254,21 @@ bool TexturedQuadsD3D12Naive::CreateGeometryBuffer(const std::vector<TexturedQua
 
 	m_VertexBufferView = D3D12_VERTEX_BUFFER_VIEW{ m_GeometryBuffer->GetGPUVirtualAddress(), sizeofVertices, sizeofVertex };
 	m_IndexBufferView = D3D12_INDEX_BUFFER_VIEW{ m_GeometryBuffer->GetGPUVirtualAddress() + sizeofVertices, sizeofIndices, DXGI_FORMAT_R16_UINT };
-
+	
 	return true;
 }
 
 bool TexturedQuadsD3D12Naive::CreateTextures(const std::vector<TextureDetails*>& _textures)
 {
-	m_SRVDescriptorSize = g_D3D12Device->GetDescriptorHandleIncrementSize(D3D12_SAMPLER_DESCRIPTOR_HEAP);
-	m_SamplerDescriptorSize = g_D3D12Device->GetDescriptorHandleIncrementSize(D3D12_CBV_SRV_UAV_DESCRIPTOR_HEAP);
+	m_SRVDescriptorSize = g_D3D12Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	m_SamplerDescriptorSize = g_D3D12Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
 	// Create sampler descriptor heap
 	// One clamp and one wrap sampler
 	D3D12_DESCRIPTOR_HEAP_DESC descHeapSampler = {};
 	descHeapSampler.NumDescriptors = 1;
-	descHeapSampler.Type = D3D12_SAMPLER_DESCRIPTOR_HEAP;
-	descHeapSampler.Flags = D3D12_DESCRIPTOR_HEAP_SHADER_VISIBLE;
+	descHeapSampler.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
+	descHeapSampler.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	HRESULT hr = g_D3D12Device->CreateDescriptorHeap(&descHeapSampler, __uuidof(ID3D12DescriptorHeap), (void **)&m_SamplerHeap);
 	if (FAILED(hr))
 		return false;
@@ -265,22 +276,22 @@ bool TexturedQuadsD3D12Naive::CreateTextures(const std::vector<TextureDetails*>&
 	D3D12_SAMPLER_DESC sampleDesc;
 	ZeroMemory(&sampleDesc, sizeof(sampleDesc));
 	sampleDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-	sampleDesc.AddressU = D3D12_TEXTURE_ADDRESS_WRAP;
-	sampleDesc.AddressV = D3D12_TEXTURE_ADDRESS_WRAP;
-	sampleDesc.AddressW = D3D12_TEXTURE_ADDRESS_WRAP;
+	sampleDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	sampleDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	sampleDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 	sampleDesc.MinLOD = 0;
 	sampleDesc.MaxLOD = D3D12_FLOAT32_MAX;
 	sampleDesc.MipLODBias = 0.0f;
 	sampleDesc.MaxAnisotropy = 1;
-	sampleDesc.ComparisonFunc = D3D12_COMPARISON_NEVER;
+	sampleDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
 
 	// Create sampler
 	g_D3D12Device->CreateSampler(&sampleDesc, m_SamplerHeap->GetCPUDescriptorHandleForHeapStart());
 	
 	D3D12_DESCRIPTOR_HEAP_DESC descHeapCbvSrv = {};
 	descHeapCbvSrv.NumDescriptors = _textures.size();
-	descHeapCbvSrv.Type = D3D12_CBV_SRV_UAV_DESCRIPTOR_HEAP;
-	descHeapCbvSrv.Flags = D3D12_DESCRIPTOR_HEAP_SHADER_VISIBLE;
+	descHeapCbvSrv.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	descHeapCbvSrv.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	hr = g_D3D12Device->CreateDescriptorHeap(&descHeapCbvSrv, __uuidof(ID3D12DescriptorHeap), (void **)&m_SRVHeap);
 	if (FAILED(hr))
 		return false;
@@ -304,13 +315,12 @@ bool TexturedQuadsD3D12Naive::CreateTextures(const std::vector<TextureDetails*>&
 		g_D3D12Device->CreateShaderResourceView(texture, &shaderResourceViewDesc, cbvSRVHandle);
 
 		// move to the next descriptor slot
-		cbvSRVHandle.Offset(m_SRVDescriptorSize);
+		cbvSRVHandle.ptr += m_SRVDescriptorSize ;
 
 		// push the textures
 		m_Textures.push_back(texture);
 
 		it++;
 	}
-
 	return true;
 }

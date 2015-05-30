@@ -75,14 +75,14 @@ void DynamicStreamingD3D12Map::Render(const std::vector<Vec2>& _vertices)
 		m_CommandList[g_curContext]->RSSetScissorRects(1, &scissorRect);
 
 		// Set Render Target
-		m_CommandList[g_curContext]->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
+		m_CommandList[g_curContext]->OMSetRenderTargets(1,&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
 
 		// Draw the triangle
 		m_CommandList[g_curContext]->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		m_CommandList[g_curContext]->SetVertexBuffers(0, &m_VertexBufferView, 1);
+		m_CommandList[g_curContext]->IASetVertexBuffers(0, 1 , &m_VertexBufferView);
 
 		// Set constant
-		m_CommandList[g_curContext]->SetGraphicsRoot32BitConstants(0, &cb, 0, 8);
+		m_CommandList[g_curContext]->SetGraphicsRoot32BitConstants(0, 8, &cb, 0);
 
 		// draw command
 		size_t memOffset = 0;
@@ -133,13 +133,15 @@ bool DynamicStreamingD3D12Map::CreatePSO()
 	// compile shader first
 	comptr<ID3DBlob> vsCode = CompileShader(L"streaming_vb_d3d12_vs.hlsl", "vsMain", "vs_5_0");
 	comptr<ID3DBlob> psCode = CompileShader(L"streaming_vb_d3d12_ps.hlsl", "psMain", "ps_5_0");
-
+	
 	D3D12_ROOT_PARAMETER rootParameters[1];
-	rootParameters[0].InitAsConstants(8, 0);
+	memset(&rootParameters[0], 0, sizeof(rootParameters[0]));
+	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+	rootParameters[0].Constants.Num32BitValues = 8;
 
-	D3D12_ROOT_SIGNATURE rootSig = { 1, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
+	D3D12_ROOT_SIGNATURE_DESC rootSig = { 1, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
 	ID3DBlob* pBlobRootSig, *pBlobErrors;
-	HRESULT hr = (D3D12SerializeRootSignature(&rootSig, D3D_ROOT_SIGNATURE_V1, &pBlobRootSig, &pBlobErrors));
+	HRESULT hr = (D3D12SerializeRootSignature(&rootSig, D3D_ROOT_SIGNATURE_VERSION_1, &pBlobRootSig, &pBlobErrors));
 	if (FAILED(hr))
 		return false;
 
@@ -149,7 +151,7 @@ bool DynamicStreamingD3D12Map::CreatePSO()
 
 	const D3D12_INPUT_ELEMENT_DESC inputLayout[] =
 	{
-		{ "Attr", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D12_INPUT_PER_VERTEX_DATA, 0 },
+		{ "Attr", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 	};
 	const UINT numInputLayoutElements = sizeof(inputLayout) / sizeof(inputLayout[0]);
 
@@ -161,8 +163,8 @@ bool DynamicStreamingD3D12Map::CreatePSO()
 	psod.VS.pShaderBytecode = vsCode->GetBufferPointer();
 	psod.PS.BytecodeLength = psCode->GetBufferSize();
 	psod.PS.pShaderBytecode = psCode->GetBufferPointer();
-	psod.RasterizerState.FillMode = D3D12_FILL_SOLID;
-	psod.RasterizerState.CullMode = D3D12_CULL_NONE;
+	psod.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+	psod.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 	psod.RasterizerState.FrontCounterClockwise = true;
 	psod.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 	psod.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -171,9 +173,9 @@ bool DynamicStreamingD3D12Map::CreatePSO()
 	psod.NumRenderTargets = 1;
 	psod.SampleMask = UINT_MAX;
 	psod.InputLayout = { inputLayout, numInputLayoutElements };
-	psod.IndexBufferProperties = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
-	psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+	psod.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
 	psod.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC();
 
 	return SUCCEEDED(g_D3D12Device->CreateGraphicsPipelineState(&psod, __uuidof(ID3D12PipelineState), (void**)&m_PipelineState));
 }
@@ -204,9 +206,9 @@ bool DynamicStreamingD3D12Map::CreateGeometryBuffer(size_t _maxVertexCount)
 
 	if (FAILED(g_D3D12Device->CreateCommittedResource(
 		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-		D3D12_HEAP_MISC_NONE,
+		D3D12_HEAP_FLAG_NONE,
 		&CD3D12_RESOURCE_DESC::Buffer(totalSize),
-		D3D12_RESOURCE_USAGE_GENERIC_READ,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
 		IID_PPV_ARGS(&m_GeometryBuffer)
 		)))
@@ -222,6 +224,6 @@ bool DynamicStreamingD3D12Map::CreateGeometryBuffer(size_t _maxVertexCount)
 	kOffsetInBytes = m_BufferSize * g_curContext;
 	kOffsetInVertices = kTotalVertices * g_curContext;
 	kPerticleInBytes = kVertsPerParticle * kVertexSizeBytes;
-
+	
 	return true;
 }

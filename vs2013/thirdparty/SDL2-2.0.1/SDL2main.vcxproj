@@ -1,0 +1,262 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="MinSizeRel|x64">
+      <Configuration>MinSizeRel</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="RelWithDebInfo|x64">
+      <Configuration>RelWithDebInfo</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGUID>{4EB85010-DB3F-40C6-B39E-F1488164ECD7}</ProjectGUID>
+    <Keyword>Win32Proj</Keyword>
+    <Platform>x64</Platform>
+    <ProjectName>SDL2main</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseOfMfc>false</UseOfMfc>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseOfMfc>false</UseOfMfc>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseOfMfc>false</UseOfMfc>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseOfMfc>false</UseOfMfc>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+    <PropertyGroup>
+      <_ProjectFileVersion>10.0.20506.1</_ProjectFileVersion>
+      <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\Debug\</OutDir>
+      <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">SDL2main.dir\Debug\</IntDir>
+      <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">SDL2main</TargetName>
+      <TargetExt Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.lib</TargetExt>
+      <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\Release\</OutDir>
+      <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">SDL2main.dir\Release\</IntDir>
+      <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">SDL2main</TargetName>
+      <TargetExt Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.lib</TargetExt>
+      <OutDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\MinSizeRel\</OutDir>
+      <IntDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">SDL2main.dir\MinSizeRel\</IntDir>
+      <TargetName Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">SDL2main</TargetName>
+      <TargetExt Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">.lib</TargetExt>
+      <OutDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\RelWithDebInfo\</OutDir>
+      <IntDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">SDL2main.dir\RelWithDebInfo\</IntDir>
+      <TargetName Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">SDL2main</TargetName>
+      <TargetExt Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">.lib</TargetExt>
+    </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\include;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\include;C:\Program Files (x86)\Windows Kits\10\Include\10.0.10069.0\um;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AssemblerListingLocation>Debug/</AssemblerListingLocation>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <CompileAs>CompileAsC</CompileAs>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <ExceptionHandling>
+      </ExceptionHandling>
+      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
+      <Optimization>Disabled</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_DEBUG;USING_GENERATED_CONFIG_H;CMAKE_INTDIR="Debug";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_DEBUG;USING_GENERATED_CONFIG_H;CMAKE_INTDIR=\"Debug\";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\include;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\include;C:\Program Files (x86)\Windows Kits\10\Include\10.0.10069.0\um;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\include;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\include;C:\Program Files (x86)\Windows Kits\10\Include\10.0.10069.0\um;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\include;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\include;C:\Program Files (x86)\Windows Kits\10\Include\10.0.10069.0\um;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AssemblerListingLocation>Release/</AssemblerListingLocation>
+      <CompileAs>CompileAsC</CompileAs>
+      <ExceptionHandling>
+      </ExceptionHandling>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <Optimization>MaxSpeed</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;NDEBUG;USING_GENERATED_CONFIG_H;CMAKE_INTDIR="Release";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <DebugInformationFormat></DebugInformationFormat>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;NDEBUG;USING_GENERATED_CONFIG_H;CMAKE_INTDIR=\"Release\";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\include;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\include;C:\Program Files (x86)\Windows Kits\10\Include\10.0.10069.0\um;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\include;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\include;C:\Program Files (x86)\Windows Kits\10\Include\10.0.10069.0\um;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\include;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\include;C:\Program Files (x86)\Windows Kits\10\Include\10.0.10069.0\um;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AssemblerListingLocation>MinSizeRel/</AssemblerListingLocation>
+      <CompileAs>CompileAsC</CompileAs>
+      <ExceptionHandling>
+      </ExceptionHandling>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <Optimization>MinSpace</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;NDEBUG;USING_GENERATED_CONFIG_H;CMAKE_INTDIR="MinSizeRel";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <DebugInformationFormat></DebugInformationFormat>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;NDEBUG;USING_GENERATED_CONFIG_H;CMAKE_INTDIR=\"MinSizeRel\";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\include;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\include;C:\Program Files (x86)\Windows Kits\10\Include\10.0.10069.0\um;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\include;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\include;C:\Program Files (x86)\Windows Kits\10\Include\10.0.10069.0\um;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\include;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\include;C:\Program Files (x86)\Windows Kits\10\Include\10.0.10069.0\um;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AssemblerListingLocation>RelWithDebInfo/</AssemblerListingLocation>
+      <CompileAs>CompileAsC</CompileAs>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <ExceptionHandling>
+      </ExceptionHandling>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <Optimization>MaxSpeed</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;NDEBUG;USING_GENERATED_CONFIG_H;CMAKE_INTDIR="RelWithDebInfo";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;NDEBUG;USING_GENERATED_CONFIG_H;CMAKE_INTDIR=\"RelWithDebInfo\";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\include;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\include;C:\Program Files (x86)\Windows Kits\10\Include\10.0.10069.0\um;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\include;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\include;C:\Program Files (x86)\Windows Kits\10\Include\10.0.10069.0\um;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\CMakeLists.txt">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Building Custom Rule C:/Users/jerry/Documents/apitest/thirdparty/SDL2-2.0.1/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\bin\cmake.exe -HC:/Users/jerry/Documents/apitest -BC:/Users/jerry/Documents/apitest/vs2013 --check-stamp-file C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\CMakeFiles\generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:/Users/jerry/Documents/apitest/thirdparty/SDL2-2.0.1/CMakeLists.txt;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\CMakeLists.txt;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckFunctionExists.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckLibraryExists.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckIncludeFiles.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckIncludeFile.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckSymbolExists.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckCSourceRuns.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckCCompilerFlag.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckCSourceCompiles.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CMakeCheckCompilerFlagCommonPatterns.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckTypeSize.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckIncludeFile.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckIncludeFileCXX.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckStructHasMember.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckCSourceCompiles.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckCXXSourceCompiles.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CMakeDependentOption.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\FindPkgConfig.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\FindPackageHandleStandardArgs.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\FindPackageMessage.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CMakeParseArguments.cmake;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\cmake\macros.cmake;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\cmake\sdlchecks.cmake;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\include\SDL_config.h.cmake;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\CMakeLists.txt;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Building Custom Rule C:/Users/jerry/Documents/apitest/thirdparty/SDL2-2.0.1/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">setlocal
+C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\bin\cmake.exe -HC:/Users/jerry/Documents/apitest -BC:/Users/jerry/Documents/apitest/vs2013 --check-stamp-file C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\CMakeFiles\generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:/Users/jerry/Documents/apitest/thirdparty/SDL2-2.0.1/CMakeLists.txt;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\CMakeLists.txt;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckFunctionExists.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckLibraryExists.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckIncludeFiles.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckIncludeFile.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckSymbolExists.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckCSourceRuns.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckCCompilerFlag.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckCSourceCompiles.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CMakeCheckCompilerFlagCommonPatterns.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckTypeSize.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckIncludeFile.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckIncludeFileCXX.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckStructHasMember.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckCSourceCompiles.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckCXXSourceCompiles.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CMakeDependentOption.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\FindPkgConfig.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\FindPackageHandleStandardArgs.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\FindPackageMessage.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CMakeParseArguments.cmake;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\cmake\macros.cmake;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\cmake\sdlchecks.cmake;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\include\SDL_config.h.cmake;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\CMakeLists.txt;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Building Custom Rule C:/Users/jerry/Documents/apitest/thirdparty/SDL2-2.0.1/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">setlocal
+C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\bin\cmake.exe -HC:/Users/jerry/Documents/apitest -BC:/Users/jerry/Documents/apitest/vs2013 --check-stamp-file C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\CMakeFiles\generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:/Users/jerry/Documents/apitest/thirdparty/SDL2-2.0.1/CMakeLists.txt;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\CMakeLists.txt;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckFunctionExists.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckLibraryExists.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckIncludeFiles.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckIncludeFile.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckSymbolExists.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckCSourceRuns.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckCCompilerFlag.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckCSourceCompiles.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CMakeCheckCompilerFlagCommonPatterns.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckTypeSize.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckIncludeFile.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckIncludeFileCXX.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckStructHasMember.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckCSourceCompiles.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckCXXSourceCompiles.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CMakeDependentOption.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\FindPkgConfig.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\FindPackageHandleStandardArgs.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\FindPackageMessage.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CMakeParseArguments.cmake;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\cmake\macros.cmake;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\cmake\sdlchecks.cmake;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\include\SDL_config.h.cmake;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\CMakeLists.txt;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Building Custom Rule C:/Users/jerry/Documents/apitest/thirdparty/SDL2-2.0.1/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">setlocal
+C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\bin\cmake.exe -HC:/Users/jerry/Documents/apitest -BC:/Users/jerry/Documents/apitest/vs2013 --check-stamp-file C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\CMakeFiles\generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:/Users/jerry/Documents/apitest/thirdparty/SDL2-2.0.1/CMakeLists.txt;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\CMakeLists.txt;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckFunctionExists.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckLibraryExists.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckIncludeFiles.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckIncludeFile.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckSymbolExists.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckCSourceRuns.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckCCompilerFlag.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckCSourceCompiles.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CMakeCheckCompilerFlagCommonPatterns.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckTypeSize.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckIncludeFile.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckIncludeFileCXX.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckStructHasMember.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckCSourceCompiles.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CheckCXXSourceCompiles.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CMakeDependentOption.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\FindPkgConfig.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\FindPackageHandleStandardArgs.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\FindPackageMessage.cmake;C:\Users\jerry\Desktop\cmake-3.2.2-win32-x86\share\cmake-3.2\Modules\CMakeParseArguments.cmake;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\cmake\macros.cmake;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\cmake\sdlchecks.cmake;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\include\SDL_config.h.cmake;C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\CMakeLists.txt;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\Users\jerry\Documents\apitest\vs2013\thirdparty\SDL2-2.0.1\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="C:\Users\jerry\Documents\apitest\thirdparty\SDL2-2.0.1\src\main\windows\SDL_windows_main.c"  />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="C:/Users/jerry/Documents/apitest/vs2013/ZERO_CHECK.vcxproj">
+      <Project>F2D82B11-0F02-4E96-A542-9B08C75B371B</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

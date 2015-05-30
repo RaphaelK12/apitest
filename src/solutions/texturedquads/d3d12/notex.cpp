@@ -74,20 +74,20 @@ void TexturedQuadsD3D12Notex::Render(const std::vector<Matrix>& _transforms)
 		m_CommandList[g_curContext]->RSSetScissorRects(1, &scissorRect);
 
 		// Set Render Target
-		m_CommandList[g_curContext]->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
+		m_CommandList[g_curContext]->OMSetRenderTargets(1, &g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
 
 		// Draw the triangle
 		m_CommandList[g_curContext]->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		m_CommandList[g_curContext]->SetVertexBuffers(0, &m_VertexBufferView, 1);
-		m_CommandList[g_curContext]->SetIndexBuffer(&m_IndexBufferView);
+		m_CommandList[g_curContext]->IASetVertexBuffers(0, 1, &m_VertexBufferView);
+		m_CommandList[g_curContext]->IASetIndexBuffer(&m_IndexBufferView);
 
-		m_CommandList[g_curContext]->SetGraphicsRoot32BitConstants(1, &vp, 0, 16);
+		m_CommandList[g_curContext]->SetGraphicsRoot32BitConstants(1, 16, &vp, 0);
 
 		ConstantsPerDraw perDrawData;
 		for (unsigned int u = 0; u < count; ++u) {
 			perDrawData.World = _transforms[u];
 			perDrawData.InstanceId = u;
-			m_CommandList[g_curContext]->SetGraphicsRoot32BitConstants(0, &perDrawData, 0, 17);
+			m_CommandList[g_curContext]->SetGraphicsRoot32BitConstants(0, 17, &perDrawData, 0);
 			m_CommandList[g_curContext]->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, u);
 		}
 		m_CommandList[g_curContext]->Close();
@@ -124,14 +124,18 @@ bool TexturedQuadsD3D12Notex::CreatePSO()
 	// compile shader first
 	comptr<ID3DBlob> vsCode = CompileShader(L"textures_d3d12_notex_vs.hlsl", "vsMain", "vs_5_0");
 	comptr<ID3DBlob> psCode = CompileShader(L"textures_d3d12_notex_ps.hlsl", "psMain", "ps_5_0");
-
+	
 	D3D12_ROOT_PARAMETER rootParameters[2];
-	rootParameters[0].InitAsConstants(17, 0);
-	rootParameters[1].InitAsConstants(16, 1);
+	memset(rootParameters, 0, sizeof(rootParameters));
+	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+	rootParameters[0].Constants.Num32BitValues = 17;
+	rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+	rootParameters[1].Constants.Num32BitValues = 16;
+	rootParameters[1].Constants.ShaderRegister = 1;
 
-	D3D12_ROOT_SIGNATURE rootSig = { 2, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
+	D3D12_ROOT_SIGNATURE_DESC rootSig = { 2, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
 	ID3DBlob* pBlobRootSig, *pBlobErrors;
-	HRESULT hr = (D3D12SerializeRootSignature(&rootSig, D3D_ROOT_SIGNATURE_V1, &pBlobRootSig, &pBlobErrors));
+	HRESULT hr = (D3D12SerializeRootSignature(&rootSig, D3D_ROOT_SIGNATURE_VERSION_1, &pBlobRootSig, &pBlobErrors));
 	if (FAILED(hr))
 		return false;
 
@@ -141,8 +145,8 @@ bool TexturedQuadsD3D12Notex::CreatePSO()
 
 	const D3D12_INPUT_ELEMENT_DESC inputLayout[] =
 	{
-		{ "ObjPos", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_PER_VERTEX_DATA, 0 },
-		{ "TexCoord", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_PER_VERTEX_DATA, 0 },
+		{ "ObjPos", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "TexCoord", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 	};
 	const UINT numInputLayoutElements = sizeof(inputLayout) / sizeof(inputLayout[0]);
 
@@ -154,8 +158,8 @@ bool TexturedQuadsD3D12Notex::CreatePSO()
 	psod.VS.pShaderBytecode = vsCode->GetBufferPointer();
 	psod.PS.BytecodeLength = psCode->GetBufferSize();
 	psod.PS.pShaderBytecode = psCode->GetBufferPointer();
-	psod.RasterizerState.FillMode = D3D12_FILL_SOLID;
-	psod.RasterizerState.CullMode = D3D12_CULL_NONE;
+	psod.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+	psod.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 	psod.RasterizerState.FrontCounterClockwise = true;
 	psod.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 	psod.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -164,8 +168,8 @@ bool TexturedQuadsD3D12Notex::CreatePSO()
 	psod.NumRenderTargets = 1;
 	psod.SampleMask = UINT_MAX;
 	psod.InputLayout = { inputLayout, numInputLayoutElements };
-	psod.IndexBufferProperties = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
-	psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+	psod.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
+	psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC();
 	psod.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
 	return SUCCEEDED(g_D3D12Device->CreateGraphicsPipelineState(&psod, __uuidof(ID3D12PipelineState), (void**)&m_PipelineState));
@@ -200,9 +204,9 @@ bool TexturedQuadsD3D12Notex::CreateGeometryBuffer(	const std::vector<TexturedQu
 
 	if (FAILED(g_D3D12Device->CreateCommittedResource(
 		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-		D3D12_HEAP_MISC_NONE,
+		D3D12_HEAP_FLAG_NONE,
 		&CD3D12_RESOURCE_DESC::Buffer(totalSize),
-		D3D12_RESOURCE_USAGE_GENERIC_READ,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
 		IID_PPV_ARGS(&m_GeometryBuffer)
 		)))
@@ -218,6 +222,6 @@ bool TexturedQuadsD3D12Notex::CreateGeometryBuffer(	const std::vector<TexturedQu
 
 	m_VertexBufferView = D3D12_VERTEX_BUFFER_VIEW{ m_GeometryBuffer->GetGPUVirtualAddress(), sizeofVertices, sizeofVertex };
 	m_IndexBufferView = D3D12_INDEX_BUFFER_VIEW{ m_GeometryBuffer->GetGPUVirtualAddress() + sizeofVertices, sizeofIndices, DXGI_FORMAT_R16_UINT };
-
+	
 	return true;
 }

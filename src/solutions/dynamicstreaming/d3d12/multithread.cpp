@@ -108,12 +108,13 @@ bool DynamicStreamingD3D12MultiThread::CreatePSO()
 	comptr<ID3DBlob> vsCode = CompileShader(L"streaming_vb_d3d12_vs.hlsl", "vsMain", "vs_5_0");
 	comptr<ID3DBlob> psCode = CompileShader(L"streaming_vb_d3d12_ps.hlsl", "psMain", "ps_5_0");
 
-	D3D12_ROOT_PARAMETER rootParameters[2];
-	rootParameters[0].InitAsConstants(8, 0);
+	D3D12_ROOT_PARAMETER rootParameters[1];
+	memset(&rootParameters[0], 0, sizeof(rootParameters[0]));
+	rootParameters[0].Constants.Num32BitValues = 8;
 
-	D3D12_ROOT_SIGNATURE rootSig = { 1, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
+	D3D12_ROOT_SIGNATURE_DESC rootSig = { 1, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
 	ID3DBlob* pBlobRootSig, *pBlobErrors;
-	HRESULT hr = (D3D12SerializeRootSignature(&rootSig, D3D_ROOT_SIGNATURE_V1, &pBlobRootSig, &pBlobErrors));
+	HRESULT hr = (D3D12SerializeRootSignature(&rootSig, D3D_ROOT_SIGNATURE_VERSION_1, &pBlobRootSig, &pBlobErrors));
 	if (FAILED(hr))
 		return false;
 
@@ -123,7 +124,7 @@ bool DynamicStreamingD3D12MultiThread::CreatePSO()
 
 	const D3D12_INPUT_ELEMENT_DESC inputLayout[] =
 	{
-		{ "Attr", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D12_INPUT_PER_VERTEX_DATA, 0 },
+		{ "Attr", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 	};
 	const UINT numInputLayoutElements = sizeof(inputLayout) / sizeof(inputLayout[0]);
 
@@ -135,8 +136,8 @@ bool DynamicStreamingD3D12MultiThread::CreatePSO()
 	psod.VS.pShaderBytecode = vsCode->GetBufferPointer();
 	psod.PS.BytecodeLength = psCode->GetBufferSize();
 	psod.PS.pShaderBytecode = psCode->GetBufferPointer();
-	psod.RasterizerState.FillMode = D3D12_FILL_SOLID;
-	psod.RasterizerState.CullMode = D3D12_CULL_NONE;
+	psod.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+	psod.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 	psod.RasterizerState.FrontCounterClockwise = true;
 	psod.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 	psod.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -145,9 +146,9 @@ bool DynamicStreamingD3D12MultiThread::CreatePSO()
 	psod.NumRenderTargets = 1;
 	psod.SampleMask = UINT_MAX;
 	psod.InputLayout = { inputLayout, numInputLayoutElements };
-	psod.IndexBufferProperties = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
-	psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+	psod.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
 	psod.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC();
 
 	return SUCCEEDED(g_D3D12Device->CreateGraphicsPipelineState(&psod, __uuidof(ID3D12PipelineState), (void**)&m_PipelineState));
 }
@@ -169,7 +170,7 @@ bool DynamicStreamingD3D12MultiThread::CreateCommandList()
 			m_CommandList[k][i]->Close();
 		}
 	}
-
+	
 	return true;
 }
 
@@ -178,12 +179,12 @@ bool DynamicStreamingD3D12MultiThread::CreateGeometryBuffer(size_t _maxVertexCou
 	const size_t sizeofVertex = sizeof(Vec2);
 	m_BufferSize = sizeofVertex * _maxVertexCount;
 	const size_t totalSize = m_BufferSize * NUM_ACCUMULATED_FRAMES;
-
+	
 	if (FAILED(g_D3D12Device->CreateCommittedResource(
 		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-		D3D12_HEAP_MISC_NONE,
+		D3D12_HEAP_FLAG_NONE,
 		&CD3D12_RESOURCE_DESC::Buffer(totalSize),
-		D3D12_RESOURCE_USAGE_GENERIC_READ,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
 		IID_PPV_ARGS(&m_GeometryBuffer)
 		)))
@@ -197,7 +198,7 @@ bool DynamicStreamingD3D12MultiThread::CreateGeometryBuffer(size_t _maxVertexCou
 	kParticleCount = _maxVertexCount / kVertsPerParticle;
 	kTotalVertices = _maxVertexCount;
 	kPerticleInBytes = kVertsPerParticle * kVertexSizeBytes;
-
+	
 	return true;
 }
 
@@ -221,14 +222,14 @@ void DynamicStreamingD3D12MultiThread::RenderPart(int pid, int total)
 	m_CommandList[g_curContext][pid]->RSSetScissorRects(1, &scissorRect);
 
 	// Set Render Target
-	m_CommandList[g_curContext][pid]->SetRenderTargets(&g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, 1, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
+	m_CommandList[g_curContext][pid]->OMSetRenderTargets(1, &g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
 
 	// Draw the triangle
 	m_CommandList[g_curContext][pid]->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	m_CommandList[g_curContext][pid]->SetVertexBuffers(0, &m_VertexBufferView, 1);
+	m_CommandList[g_curContext][pid]->IASetVertexBuffers(0, 1, &m_VertexBufferView);
 
 	// Set constant
-	m_CommandList[g_curContext][pid]->SetGraphicsRoot32BitConstants(0, &m_ConstantData, 0, 8);
+	m_CommandList[g_curContext][pid]->SetGraphicsRoot32BitConstants(0, 8, &m_ConstantData, 0);
 
 	// draw command
 	size_t start = kParticleCount / total * pid;

@@ -54,8 +54,8 @@ extern comptr<ID3D12Device>			g_D3D12Device;
 void AddResourceBarrier(
 	ID3D12GraphicsCommandList * pCl,
 	ID3D12Resource * pRes,
-	D3D12_RESOURCE_USAGE usageBefore,
-	D3D12_RESOURCE_USAGE usageAfter);
+	D3D12_RESOURCE_STATES usageBefore,
+	D3D12_RESOURCE_STATES usageAfter);
 
 // Load texture
 ID3D12Resource* NewTextureFromDetails(const TextureDetails& _texDetails);
@@ -74,7 +74,7 @@ ID3D12Resource* CreateBufferFromVector(const std::vector<T>& _data, ID3D12Heap* 
 		heap,
 		offset,
 		&CD3D12_RESOURCE_DESC::Buffer(sizeofVertices),
-		D3D12_RESOURCE_USAGE_GENERIC_READ,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
 		__uuidof(ID3D12Resource),
 		reinterpret_cast<void**>(&buffer))))
@@ -89,3 +89,85 @@ ID3D12Resource* CreateBufferFromVector(const std::vector<T>& _data, ID3D12Heap* 
 
 	return buffer;
 }
+
+// heap property wrapper
+struct CD3D12_HEAP_PROPERTIES : public D3D12_HEAP_PROPERTIES
+{
+	CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE type)
+	{
+		memset(this, 0, sizeof(*this));
+		Type = type;
+	}
+};
+
+// wrapper for heap desc
+struct CD3D12_HEAP_DESC : public D3D12_HEAP_DESC
+{
+	CD3D12_HEAP_DESC(
+		UINT64 size,
+		D3D12_HEAP_PROPERTIES properties,
+		UINT64 alignment,
+		D3D12_HEAP_FLAGS miscFlags )
+	{
+		SizeInBytes = size;
+		Properties = properties;
+		Alignment = alignment;
+		Flags = miscFlags;
+	}
+};
+
+// wrapper for resource description
+struct CD3D12_RESOURCE_DESC
+{
+	static D3D12_RESOURCE_DESC Buffer(unsigned int size)
+	{
+		D3D12_RESOURCE_DESC desc;
+		memset(&desc, 0, sizeof(desc));
+		desc.DepthOrArraySize = 1;
+		desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		desc.Format = DXGI_FORMAT_UNKNOWN;
+		desc.Width = size;
+		desc.Height = 1;
+		desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+		desc.MipLevels = 1;
+		desc.SampleDesc.Count = 1;
+		desc.SampleDesc.Quality = 0;
+
+		return desc;
+	}
+
+	static D3D12_RESOURCE_DESC Tex2D(DXGI_FORMAT format,
+		UINT64                   width,
+		UINT                     height,
+		UINT16                   arraySize = 1,
+		UINT16                   mipLevels = 0,
+		UINT                     sampleCount = 1,
+		UINT                     sampleQuality = 0,
+		D3D12_RESOURCE_FLAGS	 miscFlags = D3D12_RESOURCE_FLAG_NONE,
+		D3D12_TEXTURE_LAYOUT     layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+		UINT64                   alignment = 0)
+	{
+		D3D12_RESOURCE_DESC desc;
+		memset(&desc, 0, sizeof(desc));
+		desc.Width = width;
+		desc.Height = height;
+		desc.DepthOrArraySize = arraySize;
+		desc.MipLevels = mipLevels;
+		desc.SampleDesc.Count = sampleCount;
+		desc.SampleDesc.Quality = sampleQuality;
+		desc.Flags = miscFlags;
+		desc.Layout = layout;
+		desc.Alignment = alignment;
+
+		return desc;
+	}
+};
+
+// wrapper for depth stencil state
+struct CD3D12_DEPTH_STENCIL_DESC : public D3D12_DEPTH_STENCIL_DESC
+{
+	CD3D12_DEPTH_STENCIL_DESC()
+	{
+		memset(this, 0, sizeof(*this));
+	}
+};
