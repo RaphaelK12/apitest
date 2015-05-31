@@ -146,6 +146,7 @@ endif( apitest_WITH_D3D11 )
 if( apitest_WITH_D3D12 )
 	set( SRCS ${SRCS} 
 		framework/gfx_dx12.cpp
+		framework/gfx_dx11on12.cpp
 		
 		solutions/untexturedobjects/d3d12/setconstants.cpp
 		solutions/untexturedobjects/d3d12/setconstantbufferview.cpp
@@ -188,6 +189,8 @@ source_group( "Framework" FILES
     framework/gfx_dx11.h
 	framework/gfx_dx12.cpp
 	framework/gfx_dx12.h
+	framework/gfx_dx11on12.cpp
+	framework/gfx_dx11on12.h
     framework/gfx_gl.cpp
     framework/gfx_gl.h
     framework/mathlib.h

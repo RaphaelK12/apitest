@@ -103,6 +103,8 @@ GfxBaseApi *CreateGfxOpenGLCore();
 
 #if WITH_D3D12
 	GfxBaseApi *CreateGfxDirect3D12();
+	GfxBaseApi *CreateGfxDirect3D11On12();
 #else
 	inline GfxBaseApi *CreateGfxDirect3D12() { return nullptr; }
+	inline GfxBaseApi *CreateGfxDirect3D11On12() { return nullptr; }
 #endif

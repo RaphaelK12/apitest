@@ -86,8 +86,6 @@ inline ID3D11Buffer* CreateBufferFromVector(const std::vector<T>& _data, D3D11_U
 
 // TODO: Cleanup formatting
 // DX11 Globals
-extern IDXGIFactory* g_dxgi_factory;
 extern ID3D11Device* g_d3d_device;
-extern D3D_FEATURE_LEVEL g_d3d_feature_level;
 extern ID3D11DeviceContext* g_d3d_context;
 

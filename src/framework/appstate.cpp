@@ -478,6 +478,16 @@ void ApplicationState::createGfxApis()
 			SafeDelete(tmpApi);
 		}
 	}
+
+	tmpApi = CreateGfxDirect3D11On12();
+	if (tmpApi) {
+		if (tmpApi->Init("apitest - Direct3D11On12", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, mResWidth, mResHeight)) {
+			mGfxApis[tmpApi->GetShortName()] = tmpApi;
+		}
+		else {
+			SafeDelete(tmpApi);
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
