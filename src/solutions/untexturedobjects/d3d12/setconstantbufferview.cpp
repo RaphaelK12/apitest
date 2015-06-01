@@ -50,7 +50,7 @@ bool UntexturedObjectsD3D12SetConstantBufferView::CreatePSO()
 	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
 	rootParameters[0].Descriptor.ShaderRegister = 0;
 	rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-	rootParameters[1].Constants.Num32BitValues = 8;
+	rootParameters[1].Constants.Num32BitValues = 16;
 	rootParameters[1].Constants.ShaderRegister = 1;
 
 	D3D12_ROOT_SIGNATURE_DESC rootSig = { 2, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
@@ -66,7 +66,7 @@ bool UntexturedObjectsD3D12SetConstantBufferView::CreatePSO()
 	const D3D12_INPUT_ELEMENT_DESC inputLayout[] =
 	{
 		{ "ObjPos", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "Color", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 0 },
+		{ "Color", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 	};
 	const UINT numInputLayoutElements = sizeof(inputLayout) / sizeof(inputLayout[0]);
 
@@ -89,12 +89,12 @@ bool UntexturedObjectsD3D12SetConstantBufferView::CreatePSO()
 	psod.SampleMask = UINT_MAX;
 	psod.InputLayout = { inputLayout, numInputLayoutElements };
 	psod.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
-	psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC();
 	psod.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	psod.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+	psod.DepthStencilState.DepthEnable = true;
+	psod.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
 
 	return SUCCEEDED(g_D3D12Device->CreateGraphicsPipelineState(&psod, __uuidof(ID3D12PipelineState), (void**)&m_PipelineState));
-
-	return false;
 }
 
 bool UntexturedObjectsD3D12SetConstantBufferView::CreateGeometryBuffer(const std::vector<UntexturedObjectsProblem::Vertex>& _vertices,

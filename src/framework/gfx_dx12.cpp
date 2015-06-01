@@ -4,18 +4,22 @@
 
 #pragma comment(lib, "d3d12.lib")
 
+#define		BACK_BUFFER_COUNT NUM_ACCUMULATED_FRAMES
+
 // Globals
 comptr<IDXGIFactory>				g_dxgi_factory;
 comptr<ID3D12Device>				g_D3D12Device;
 comptr<ID3D12CommandQueue>			g_CommandQueue;
 comptr<ID3D12CommandAllocator>		g_CommandAllocator[NUM_ACCUMULATED_FRAMES];
 comptr<ID3D12DescriptorHeap>		g_HeapRTV;
+comptr<ID3D12DescriptorHeap>		g_HeapRTVOri[BACK_BUFFER_COUNT];
 comptr<ID3D12DescriptorHeap>		g_HeapDSV;
-comptr<ID3D12Resource>				g_BackBuffer;
+comptr<ID3D12Resource>				g_BackBuffer[BACK_BUFFER_COUNT];
 comptr<ID3D12Resource>				g_DepthStencilBuffer;
 static comptr<ID3D12CommandAllocator>		g_CopyCommandAllocator;
 static comptr<ID3D12GraphicsCommandList>	g_CopyCommand;
 int									g_curContext = 0;
+int									g_backBufferIndex = 0;
 
 int		g_ClientWidth;
 int		g_ClientHeight;
@@ -56,12 +60,14 @@ bool GfxApiDirect3D12::Init(const std::string& _title, int _x, int _y, int _widt
 	HRESULT hr = CreateDXGIFactory(__uuidof(IDXGIFactory), reinterpret_cast<void**>(&g_dxgi_factory));
 	if (FAILED(hr))
 		return false;
-	/*
-	D3D12_CREATE_DEVICE_FLAG flag = D3D12_CREATE_DEVICE_NONE;
+
 #if _DEBUG
-	flag |= D3D12_CREATE_DEVICE_DEBUG;
+	ID3D12Debug* d3d12DebugController{};
+	D3D12GetDebugInterface(__uuidof(ID3D12Debug), (void**)&d3d12DebugController);
+	d3d12DebugController->EnableDebugLayer();
+	d3d12DebugController->Release();
 #endif
-*/
+
 	// Create D3D12 Device
 	hr = D3D12CreateDevice(NULL, D3D_FEATURE_LEVEL_11_0, __uuidof(ID3D12Device), (void **)&g_D3D12Device);
 	if (FAILED(hr))
@@ -87,8 +93,15 @@ void GfxApiDirect3D12::Shutdown()
 {
 	g_FinishFence.release();
 
+#if SWAPBUFFER_SEQUENTIAL
+	for (int i = 0; i < BACK_BUFFER_COUNT; ++i )
+		g_HeapRTVOri[i].release();
+#else
 	g_HeapRTV.release();
-	g_BackBuffer.release();
+#endif
+
+	g_BackBuffer[0].release();
+	g_BackBuffer[1].release();
 	g_HeapDSV.release();
 	g_DepthStencilBuffer.release();
 	m_SwapChain.release();
@@ -145,11 +158,13 @@ void GfxApiDirect3D12::Clear(Vec4 _clearColor, GLfloat _clearDepth)
 	if (FAILED(hr))
 		return;
 
+	g_HeapRTV = g_HeapRTVOri[g_backBufferIndex];
+
 	// reset command list
 	m_BeginCommandList[g_curContext]->Reset(g_CommandAllocator[g_curContext], 0);
 
 	// Add resource barrier
-	AddResourceBarrier(m_BeginCommandList[g_curContext], g_BackBuffer, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	AddResourceBarrier(m_BeginCommandList[g_curContext], g_BackBuffer[g_backBufferIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 	// Bind render target for drawing
 	m_BeginCommandList[g_curContext]->ClearRenderTargetView(g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), &_clearColor.x, 0, 0);
@@ -171,7 +186,7 @@ void GfxApiDirect3D12::SwapBuffers()
 	m_EndCommandList[g_curContext]->Reset(g_CommandAllocator[g_curContext], 0);
 
 	// Add resource barrier
-	AddResourceBarrier(m_EndCommandList[g_curContext], g_BackBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+	AddResourceBarrier(m_EndCommandList[g_curContext], g_BackBuffer[g_backBufferIndex], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
 
 	// Close the command list
 	m_EndCommandList[g_curContext]->Close();
@@ -187,6 +202,7 @@ void GfxApiDirect3D12::SwapBuffers()
 	g_CommandQueue->Signal(g_FinishFence, g_finishFenceValue);
 
 	g_curContext = (g_curContext + 1) % NUM_ACCUMULATED_FRAMES;
+	g_backBufferIndex = (g_backBufferIndex + 1) % BACK_BUFFER_COUNT;
 }
 
 // --------------------------------------------------------------------------------------------------------------------
@@ -202,14 +218,13 @@ bool GfxApiDirect3D12::CreateSwapChain()
 	swap_chain_desc.BufferDesc.Width = UINT(g_ClientWidth);
 	swap_chain_desc.BufferDesc.Height = UINT(g_ClientHeight);
 	swap_chain_desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	swap_chain_desc.BufferCount = BACK_BUFFER_COUNT;
 	swap_chain_desc.SampleDesc.Count = 1;
 	swap_chain_desc.SampleDesc.Quality = 0;
 	swap_chain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	swap_chain_desc.BufferCount = 1;
 	swap_chain_desc.OutputWindow = GetHwnd(mWnd);
 	swap_chain_desc.Windowed = TRUE;
-	swap_chain_desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
-	swap_chain_desc.Flags = 0;
+	swap_chain_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
 
 	if (FAILED(g_dxgi_factory->CreateSwapChain(g_CommandQueue, &swap_chain_desc, &m_SwapChain))) {
 		return false;
@@ -231,17 +246,25 @@ HRESULT GfxApiDirect3D12::CreateRenderTarget()
 {
 	// Create descriptor heap for RTV
 	D3D12_DESCRIPTOR_HEAP_DESC heapDescRTV = { D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 1, D3D12_DESCRIPTOR_HEAP_FLAG_NONE, 0 };
-	HRESULT hr = g_D3D12Device->CreateDescriptorHeap(&heapDescRTV, __uuidof(ID3D12DescriptorHeap), (void **)&g_HeapRTV);
-	if (FAILED(hr))
-		return hr;
 
-	// Get Back Buffer
-	hr = m_SwapChain->GetBuffer(0, __uuidof(ID3D12Resource), (void **)&g_BackBuffer);
-	if (FAILED(hr))
-		return hr;
+	HRESULT hr;
+	for (int i = 0; i < BACK_BUFFER_COUNT; ++i)
+	{
+		hr = g_D3D12Device->CreateDescriptorHeap(&heapDescRTV, __uuidof(ID3D12DescriptorHeap), (void **)&g_HeapRTVOri[i]);
+		if (FAILED(hr))
+			return hr;
+	}
+
+	for (int i = 0; i < BACK_BUFFER_COUNT; ++i)
+	{
+		hr = m_SwapChain->GetBuffer(i, __uuidof(ID3D12Resource), (void **)&g_BackBuffer[i]);
+		if (FAILED(hr))
+			return hr;
+	}
 
 	// create render target view
-	g_D3D12Device->CreateRenderTargetView(g_BackBuffer, 0, g_HeapRTV->GetCPUDescriptorHandleForHeapStart());
+	for (int i = 0; i < BACK_BUFFER_COUNT; ++i )
+		g_D3D12Device->CreateRenderTargetView(g_BackBuffer[i], 0, g_HeapRTVOri[i]->GetCPUDescriptorHandleForHeapStart());
 
 	return S_OK;
 }
@@ -267,7 +290,7 @@ HRESULT GfxApiDirect3D12::CreateDepthBuffer()
 	}
 
 	// Create descriptor heap for DSV
-	D3D12_DESCRIPTOR_HEAP_DESC deapDescDSV = { D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1, D3D12_DESCRIPTOR_HEAP_FLAG_NONE };
+	D3D12_DESCRIPTOR_HEAP_DESC deapDescDSV = { D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1, D3D12_DESCRIPTOR_HEAP_FLAG_NONE , 0 };
 	HRESULT hr = g_D3D12Device->CreateDescriptorHeap(&deapDescDSV, __uuidof(ID3D12DescriptorHeap), (void **)&g_HeapDSV);
 	if (FAILED(hr))
 		return hr;
@@ -381,18 +404,17 @@ ID3D12Resource* NewTextureFromDetails(const TextureDetails& _texDetails)
 {
 	ID3D12Resource*	texture = 0;
 
-	D3D12_RESOURCE_DESC texdesc;
-	memset(&texdesc, 0, sizeof(texdesc));
-	texdesc.DepthOrArraySize = 1;
-	texdesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-	texdesc.Format = (DXGI_FORMAT)_texDetails.d3dFormat;
-	texdesc.Width = _texDetails.dwWidth;
-	texdesc.Height = _texDetails.dwHeight;
-	texdesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-	texdesc.MipLevels = _texDetails.szMipMapCount;
-	texdesc.SampleDesc.Count = 1;
-	texdesc.SampleDesc.Quality = 0;
-	
+	// get the current texture desc
+	CD3D12_RESOURCE_DESC texdesc(
+		D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+		0,		// alignment
+		_texDetails.dwWidth, _texDetails.dwHeight, 1,
+		_texDetails.szMipMapCount,
+		(DXGI_FORMAT)_texDetails.d3dFormat,
+		1, 0,	// sample count/quality
+		D3D12_TEXTURE_LAYOUT_UNKNOWN,
+		D3D12_RESOURCE_FLAG_NONE);
+
 	// create the default texture
 	HRESULT hr = g_D3D12Device->CreateCommittedResource(
 		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
@@ -455,7 +477,7 @@ ID3D12Resource* NewTextureFromDetails(const TextureDetails& _texDetails)
 	g_CopyCommand->Reset(g_CopyCommandAllocator, 0);
 
 	AddResourceBarrier(g_CopyCommand, texture, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
-	//UpdateSubresources(g_CopyCommand, texture, uploadTex, 0, 0, num2DSubresources, initialDatas.data());
+	UpdateSubresources(g_CopyCommand, texture, uploadTex, 0, 0, num2DSubresources, initialDatas.data());
 	AddResourceBarrier(g_CopyCommand, texture, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 	g_CopyCommand->Close();

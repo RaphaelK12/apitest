@@ -110,6 +110,7 @@ bool DynamicStreamingD3D12MultiThread::CreatePSO()
 
 	D3D12_ROOT_PARAMETER rootParameters[1];
 	memset(&rootParameters[0], 0, sizeof(rootParameters[0]));
+	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
 	rootParameters[0].Constants.Num32BitValues = 8;
 
 	D3D12_ROOT_SIGNATURE_DESC rootSig = { 1, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };

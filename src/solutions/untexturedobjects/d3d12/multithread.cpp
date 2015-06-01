@@ -91,8 +91,10 @@ bool UntexturedObjectsD3D12MultiThread::CreatePSO()
 	psod.SampleMask = UINT_MAX;
 	psod.InputLayout = { inputLayout, numInputLayoutElements };
 	psod.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
-	psod.DepthStencilState = CD3D12_DEPTH_STENCIL_DESC();
 	psod.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	psod.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+	psod.DepthStencilState.DepthEnable = true;
+	psod.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
 
 	if (FAILED(g_D3D12Device->CreateGraphicsPipelineState(&psod, __uuidof(ID3D12PipelineState), (void**)&m_PipelineState)))
 		return false;
