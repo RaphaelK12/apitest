@@ -20,6 +20,7 @@ public:
     virtual void SwapBuffers() override;
 
     virtual EGfxApi GetApiType() const { return EGfxApi::Direct3D11; }
+	static EGfxApi GetApiTypeStatic() { return EGfxApi::Direct3D11; }
 
     inline virtual const char* GetShortName() const override { return SGetShortName(); }
     inline virtual const char* GetLongName() const override { return SGetLongName(); }
@@ -33,6 +34,15 @@ protected:
     ID3D11DepthStencilView* mDepthStencilView;
 
     virtual bool CreateSwapChain();
+
+	ID3D11Device*			m_real_device;
+	ID3D11DeviceContext*	m_real_context;
+	IDXGIFactory*			m_dxgi_factory;
+	D3D_FEATURE_LEVEL		m_d3d_feature_level;
+
+public:
+	static ID3D11Device*			m_d3d_device;
+	static ID3D11DeviceContext*		m_d3d_context;
 };
 
 // --------------------------------------------------------------------------------------------------------------------
@@ -41,22 +51,22 @@ protected:
 // DX11 Utilities
 bool CompileProgram(const std::wstring& _vsFilename, ID3D11VertexShader** _outVertexShader,
                     const std::wstring& _psFilename, ID3D11PixelShader** _outPixelShader,
-                    UINT _inputElementCount, const D3D11_INPUT_ELEMENT_DESC* _inputElementDescs, ID3D11InputLayout** _outInputLayout);
+					UINT _inputElementCount, const D3D11_INPUT_ELEMENT_DESC* _inputElementDescs, ID3D11InputLayout** _outInputLayout, ID3D11Device* device);
 
-HRESULT CreateRenderTarget(IDXGISwapChain* dxgi_swap_chain, ID3D11RenderTargetView** out_render_target_view);
-HRESULT CreateDepthBuffer(IDXGISwapChain* dxgi_swap_chain, ID3D11DepthStencilView** out_depth_stencil_view);
-ID3D11Texture2D* NewTexture2DFromDetails(const TextureDetails& _texDetails);
-ID3D11ShaderResourceView* NewTexture2DSRVFromDetails(const TextureDetails& _texDetails);
+HRESULT CreateRenderTarget(IDXGISwapChain* dxgi_swap_chain, ID3D11RenderTargetView** out_render_target_view, ID3D11Device* device);
+HRESULT CreateDepthBuffer(IDXGISwapChain* dxgi_swap_chain, ID3D11DepthStencilView** out_depth_stencil_view, ID3D11Device* device);
+ID3D11Texture2D* NewTexture2DFromDetails(const TextureDetails& _texDetails, ID3D11Device* device);
+ID3D11ShaderResourceView* NewTexture2DSRVFromDetails(const TextureDetails& _texDetails, ID3D11Device* device);
 
-HRESULT CreateConstantBuffer(int size, const void* data, ID3D11Buffer** out_buffer);
-HRESULT CreateDynamicVertexBuffer(int _size, const void* _data, ID3D11Buffer** _out_buffer);
-HRESULT CreateDynamicVertexBuffer(int _size, const void* _data, D3D11_USAGE _usage, UINT _cpuAccessFlags, ID3D11Buffer** _outBuffer);
+HRESULT CreateConstantBuffer(int size, const void* data, ID3D11Buffer** out_buffer, ID3D11Device* device);
+HRESULT CreateDynamicVertexBuffer(int _size, const void* _data, ID3D11Buffer** _out_buffer, ID3D11Device* device);
+HRESULT CreateDynamicVertexBuffer(int _size, const void* _data, D3D11_USAGE _usage, UINT _cpuAccessFlags, ID3D11Buffer** _outBuffer, ID3D11Device* device);
 
 ID3DBlob* CompileShader(const std::wstring& _shaderFilename, const char* _shaderEntryPoint, const char* _shaderTarget);
 
 // --------------------------------------------------------------------------------------------------------------------
 template <typename T>
-inline ID3D11Buffer* CreateBufferFromVector(const std::vector<T>& _data, D3D11_USAGE _usage, UINT _bindFlags, UINT _cpuAccessFlags=0, UINT _miscFlags=0)
+inline ID3D11Buffer* CreateBufferFromVector(ID3D11Device* device, const std::vector<T>& _data, D3D11_USAGE _usage, UINT _bindFlags, UINT _cpuAccessFlags = 0, UINT _miscFlags = 0)
 {
     // TODO: This should be refactored into a helper function that we call, but for now just do it all here.
     // D3D is so verbose. :(
@@ -75,7 +85,7 @@ inline ID3D11Buffer* CreateBufferFromVector(const std::vector<T>& _data, D3D11_U
     initialData.SysMemSlicePitch = 0;
     
     ID3D11Buffer* retBuffer = nullptr;
-    if (FAILED(g_d3d_device->CreateBuffer(&desc, &initialData, &retBuffer))) {
+	if (FAILED(device->CreateBuffer(&desc, &initialData, &retBuffer))) {
         // TODO: Would like to log this failure--do that once this is refactored out of the header file.
         SafeRelease(retBuffer);
         return nullptr;
@@ -83,9 +93,3 @@ inline ID3D11Buffer* CreateBufferFromVector(const std::vector<T>& _data, D3D11_U
 
     return retBuffer;    
 }
-
-// TODO: Cleanup formatting
-// DX11 Globals
-extern ID3D11Device* g_d3d_device;
-extern ID3D11DeviceContext* g_d3d_context;
-

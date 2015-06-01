@@ -2,10 +2,12 @@
 
 #include "solutions/dynamicstreamingsoln.h"
 #include "framework/gfx_dx11.h"
+#include "framework/gfx_dx11on12.h"
 
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
+template<class T>
 class DynamicStreamingD3D11UpdateSubresource : public DynamicStreamingSolution
 {
 public:
@@ -17,7 +19,7 @@ public:
     virtual void Shutdown() override;
 
     virtual std::string GetName() const override { return "D3D11UpdateSubresource"; }
-    virtual bool SupportsApi(EGfxApi _api) const override { return _api == EGfxApi::Direct3D11; }
+	virtual bool SupportsApi(EGfxApi _api) const override { return T::GetApiTypeStatic() == _api; }
 
 private:
     struct Constants

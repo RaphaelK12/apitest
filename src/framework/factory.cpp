@@ -88,12 +88,15 @@ ProblemFactory::ProblemFactory(bool _skipInit)
         mSolutions[mProblems.back()->GetName()].push_back(new DynamicStreamingGLMapUnsynchronized());
         mSolutions[mProblems.back()->GetName()].push_back(new DynamicStreamingGLMapPersistent());
         #if WITH_D3D11
-            mSolutions[mProblems.back()->GetName()].push_back(new DynamicStreamingD3D11MapNoOverwrite());
-            mSolutions[mProblems.back()->GetName()].push_back(new DynamicStreamingD3D11UpdateSubresource());
+			mSolutions[mProblems.back()->GetName()].push_back(new DynamicStreamingD3D11MapNoOverwrite<GfxApiDirect3D11>());
+			mSolutions[mProblems.back()->GetName()].push_back(new DynamicStreamingD3D11UpdateSubresource<GfxApiDirect3D11>());
         #endif
 		#if WITH_D3D12
 			mSolutions[mProblems.back()->GetName()].push_back(new DynamicStreamingD3D12Map());
 			mSolutions[mProblems.back()->GetName()].push_back(new DynamicStreamingD3D12MultiThread());
+
+			mSolutions[mProblems.back()->GetName()].push_back(new DynamicStreamingD3D11MapNoOverwrite<GfxApiDirect3D11On12>());
+			mSolutions[mProblems.back()->GetName()].push_back(new DynamicStreamingD3D11UpdateSubresource<GfxApiDirect3D11On12>());
 		#endif
     } else {
         newProb->Shutdown();
@@ -123,13 +126,15 @@ ProblemFactory::ProblemFactory(bool _skipInit)
         mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsGLMapPersistent());
         mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsGLTexCoord());
         #if WITH_D3D11
-            mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D11Naive());
+			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D11Naive<GfxApiDirect3D11>());
         #endif
 		#if WITH_D3D12
 			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12SetConstants());
 			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12SetConstantBufferView());
 			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12MultiThread());
 			//Solutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12ExecuteIndirect()); not working yet
+
+			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D11Naive<GfxApiDirect3D11On12>());
 		#endif
     } else {
         newProb->Shutdown();
@@ -159,12 +164,14 @@ ProblemFactory::ProblemFactory(bool _skipInit)
         mSolutions[mProblems.back()->GetName()].push_back(new TexturedQuadsGLTextureArrayMultiDrawBuffer(true));
         mSolutions[mProblems.back()->GetName()].push_back(new TexturedQuadsGLTextureArrayMultiDrawBuffer(false));
         #if WITH_D3D11
-            mSolutions[mProblems.back()->GetName()].push_back(new TexturedQuadsD3D11Naive());
+			mSolutions[mProblems.back()->GetName()].push_back(new TexturedQuadsD3D11Naive<GfxApiDirect3D11>());
         #endif
 		#if WITH_D3D12
 			mSolutions[mProblems.back()->GetName()].push_back(new TexturedQuadsD3D12Naive());
 			mSolutions[mProblems.back()->GetName()].push_back(new TexturedQuadsD3D12MultiThread());
 			mSolutions[mProblems.back()->GetName()].push_back(new TexturedQuadsD3D12Notex());
+
+			mSolutions[mProblems.back()->GetName()].push_back(new TexturedQuadsD3D11Naive<GfxApiDirect3D11On12>());
 		#endif
     } else {
         newProb->Shutdown();

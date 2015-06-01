@@ -3,10 +3,14 @@
 #include "naive.h"
 #include "framework/gfx_dx11.h"
 
+template class TexturedQuadsD3D11Naive<GfxApiDirect3D11>;
+template class TexturedQuadsD3D11Naive<GfxApiDirect3D11On12>;
+
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
-TexturedQuadsD3D11Naive::TexturedQuadsD3D11Naive()
+template<class T>
+TexturedQuadsD3D11Naive<T>::TexturedQuadsD3D11Naive()
 : mInputLayout()
 , mConstantBufferPerFrame()
 , mVertexShader()
@@ -19,11 +23,15 @@ TexturedQuadsD3D11Naive::TexturedQuadsD3D11Naive()
 {}
 
 // --------------------------------------------------------------------------------------------------------------------
-bool TexturedQuadsD3D11Naive::Init(const std::vector<TexturedQuadsProblem::Vertex>& _vertices,
+template<class T>
+bool TexturedQuadsD3D11Naive<T>::Init(const std::vector<TexturedQuadsProblem::Vertex>& _vertices,
                                    const std::vector<TexturedQuadsProblem::Index>& _indices,
                                    const std::vector<TextureDetails*>& _textures,
                                    size_t _objectCount)
 {
+	if (T::m_d3d_device == 0)
+		return false;
+
     if (!TexturedQuadsSolution::Init(_vertices, _indices, _textures, _objectCount)) {
         return false;
     }
@@ -36,24 +44,24 @@ bool TexturedQuadsD3D11Naive::Init(const std::vector<TexturedQuadsProblem::Verte
 
     if (!CompileProgram(L"textures_d3d11_naive_vs.hlsl", &mVertexShader, 
                         L"textures_d3d11_naive_ps.hlsl", &mPixelShader,
-                        ArraySize(elements), elements, &mInputLayout)) {
+						ArraySize(elements), elements, &mInputLayout, T::m_d3d_device)) {
         return false;
     }
 
     // Constant Buffer
-    HRESULT hr = CreateConstantBuffer(sizeof(ConstantsPerFrame), nullptr, &mConstantBufferPerFrame);
+	HRESULT hr = CreateConstantBuffer(sizeof(ConstantsPerFrame), nullptr, &mConstantBufferPerFrame, T::m_d3d_device);
     if (FAILED(hr)) {
         return false;
     }
 
-    hr = CreateConstantBuffer(sizeof(ConstantsPerDraw), nullptr, &mConstantBufferPerDraw);
+	hr = CreateConstantBuffer(sizeof(ConstantsPerDraw), nullptr, &mConstantBufferPerDraw, T::m_d3d_device);
     if (FAILED(hr)) {
         return false;
     }
 
     // Textures
     for (auto it = _textures.begin(); it != _textures.end(); ++it) {
-        ID3D11ShaderResourceView* texSRV = NewTexture2DSRVFromDetails(*(*it));
+		ID3D11ShaderResourceView* texSRV = NewTexture2DSRVFromDetails(*(*it), T::m_d3d_device);
         if (!texSRV) {
             console::warn("Unable to initialize solution '%s', texture creation failed.", GetName().c_str());
             return false;
@@ -77,7 +85,7 @@ bool TexturedQuadsD3D11Naive::Init(const std::vector<TexturedQuadsProblem::Verte
         desc.MultisampleEnable = FALSE;
         desc.AntialiasedLineEnable = FALSE;
 
-        hr = g_d3d_device->CreateRasterizerState(&desc, &mRasterizerState);
+        hr = T::m_d3d_device->CreateRasterizerState(&desc, &mRasterizerState);
         if (FAILED(hr)) {
             return false;
         }
@@ -98,7 +106,7 @@ bool TexturedQuadsD3D11Naive::Init(const std::vector<TexturedQuadsProblem::Verte
         rtDesc.BlendOpAlpha = D3D11_BLEND_OP_ADD;
         rtDesc.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 
-        hr = g_d3d_device->CreateBlendState(&desc, &mBlendState);
+        hr = T::m_d3d_device->CreateBlendState(&desc, &mBlendState);
         if (FAILED(hr)) {
             return false;
         }
@@ -121,7 +129,7 @@ bool TexturedQuadsD3D11Naive::Init(const std::vector<TexturedQuadsProblem::Verte
         desc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
         desc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
 
-        hr = g_d3d_device->CreateDepthStencilState(&desc, &mDepthStencilState);
+        hr = T::m_d3d_device->CreateDepthStencilState(&desc, &mDepthStencilState);
         if (FAILED(hr)) {
             return false;
         }
@@ -143,18 +151,18 @@ bool TexturedQuadsD3D11Naive::Init(const std::vector<TexturedQuadsProblem::Verte
         desc.MinLOD = 0;
         desc.MaxLOD = D3D11_FLOAT32_MAX;
 
-        hr = g_d3d_device->CreateSamplerState(&desc, &mSamplerState);
+        hr = T::m_d3d_device->CreateSamplerState(&desc, &mSamplerState);
         if (FAILED(hr)) {
             return false;
         }
     }
 
-    mVertexBuffer = CreateBufferFromVector(_vertices, D3D11_USAGE_IMMUTABLE, D3D11_BIND_VERTEX_BUFFER);
+	mVertexBuffer = CreateBufferFromVector(T::m_d3d_device, _vertices, D3D11_USAGE_IMMUTABLE, D3D11_BIND_VERTEX_BUFFER);
     if (!mVertexBuffer) {
         return false;
     }
 
-    mIndexBuffer = CreateBufferFromVector(_indices, D3D11_USAGE_IMMUTABLE, D3D11_BIND_INDEX_BUFFER);
+	mIndexBuffer = CreateBufferFromVector(T::m_d3d_device, _indices, D3D11_USAGE_IMMUTABLE, D3D11_BIND_INDEX_BUFFER);
     if (!mVertexBuffer) {
         return false;
     }
@@ -165,7 +173,8 @@ bool TexturedQuadsD3D11Naive::Init(const std::vector<TexturedQuadsProblem::Verte
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-void TexturedQuadsD3D11Naive::Render(const std::vector<Matrix>& _transforms)
+template<class T>
+void TexturedQuadsD3D11Naive<T>::Render(const std::vector<Matrix>& _transforms)
 {
     // Program
     Vec3 dir = { 0, 0, 1 };
@@ -178,7 +187,7 @@ void TexturedQuadsD3D11Naive::Render(const std::vector<Matrix>& _transforms)
     cFrame.ViewProjection = mProj * view;
     
 
-    g_d3d_context->UpdateSubresource(mConstantBufferPerFrame, 0, nullptr, &cFrame, 0, 0);
+    T::m_d3d_context->UpdateSubresource(mConstantBufferPerFrame, 0, nullptr, &cFrame, 0, 0);
 
     ID3D11Buffer* ia_buffers[] = { mVertexBuffer };
     UINT ia_strides[] = { sizeof(TexturedQuadsProblem::Vertex) };
@@ -186,20 +195,20 @@ void TexturedQuadsD3D11Naive::Render(const std::vector<Matrix>& _transforms)
 
     float blendFactor[4] = { 0, 0, 0, 0 };
 
-    g_d3d_context->IASetInputLayout(mInputLayout);
-    g_d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    g_d3d_context->IASetVertexBuffers(0, 1, ia_buffers, ia_strides, ia_offsets);
-    g_d3d_context->IASetIndexBuffer(mIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
+    T::m_d3d_context->IASetInputLayout(mInputLayout);
+    T::m_d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    T::m_d3d_context->IASetVertexBuffers(0, 1, ia_buffers, ia_strides, ia_offsets);
+    T::m_d3d_context->IASetIndexBuffer(mIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
 
-    g_d3d_context->VSSetShader(mVertexShader, nullptr, 0);
-    g_d3d_context->VSSetConstantBuffers(0, 1, &mConstantBufferPerFrame);
-    g_d3d_context->VSSetConstantBuffers(1, 1, &mConstantBufferPerDraw);
-    g_d3d_context->GSSetShader(nullptr, nullptr, 0);
-    g_d3d_context->RSSetState(mRasterizerState);
-    g_d3d_context->PSSetShader(mPixelShader, nullptr, 0);
-    g_d3d_context->PSSetSamplers(0, 1, &mSamplerState);
-    g_d3d_context->OMSetBlendState(mBlendState, blendFactor, 0xffffffff);
-    g_d3d_context->OMSetDepthStencilState(mDepthStencilState, 0);
+    T::m_d3d_context->VSSetShader(mVertexShader, nullptr, 0);
+    T::m_d3d_context->VSSetConstantBuffers(0, 1, &mConstantBufferPerFrame);
+    T::m_d3d_context->VSSetConstantBuffers(1, 1, &mConstantBufferPerDraw);
+    T::m_d3d_context->GSSetShader(nullptr, nullptr, 0);
+    T::m_d3d_context->RSSetState(mRasterizerState);
+    T::m_d3d_context->PSSetShader(mPixelShader, nullptr, 0);
+    T::m_d3d_context->PSSetSamplers(0, 1, &mSamplerState);
+    T::m_d3d_context->OMSetBlendState(mBlendState, blendFactor, 0xffffffff);
+    T::m_d3d_context->OMSetDepthStencilState(mDepthStencilState, 0);
 
     size_t xformCount = _transforms.size();
     assert(xformCount <= mObjectCount);
@@ -211,7 +220,7 @@ void TexturedQuadsD3D11Naive::Render(const std::vector<Matrix>& _transforms)
     ConstantsPerDraw cDraw;
     for (size_t u = 0; u < xformCount; ++u) {
         cDraw.World = transpose(_transforms[u]);
-        g_d3d_context->UpdateSubresource(mConstantBufferPerDraw, 0, nullptr, &cDraw, 0, 0);
+        T::m_d3d_context->UpdateSubresource(mConstantBufferPerDraw, 0, nullptr, &cDraw, 0, 0);
 
         if (srvIt == mTextureSRVs.end()) {
             srvIt = mTextureSRVs.begin();
@@ -220,13 +229,14 @@ void TexturedQuadsD3D11Naive::Render(const std::vector<Matrix>& _transforms)
         ID3D11ShaderResourceView* activeTexSRV = *srvIt;
         ++srvIt;
 
-        g_d3d_context->PSSetShaderResources(0, 1, &activeTexSRV);
-        g_d3d_context->DrawIndexed(mIndexCount, 0, 0);
+        T::m_d3d_context->PSSetShaderResources(0, 1, &activeTexSRV);
+        T::m_d3d_context->DrawIndexed(mIndexCount, 0, 0);
     }
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-void TexturedQuadsD3D11Naive::Shutdown()
+template<class T>
+void TexturedQuadsD3D11Naive<T>::Shutdown()
 {
     for (auto it = mTextureSRVs.begin(); it != mTextureSRVs.end(); ++it) {
         SafeRelease(*it);

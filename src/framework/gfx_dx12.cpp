@@ -62,10 +62,10 @@ bool GfxApiDirect3D12::Init(const std::string& _title, int _x, int _y, int _widt
 		return false;
 
 #if _DEBUG
-	ID3D12Debug* d3d12DebugController{};
+	/*ID3D12Debug* d3d12DebugController{};
 	D3D12GetDebugInterface(__uuidof(ID3D12Debug), (void**)&d3d12DebugController);
 	d3d12DebugController->EnableDebugLayer();
-	d3d12DebugController->Release();
+	d3d12DebugController->Release();*/
 #endif
 
 	// Create D3D12 Device

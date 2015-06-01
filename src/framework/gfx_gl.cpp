@@ -542,6 +542,8 @@ bool IsOpenGL(EGfxApi _api, bool _compat)
             return (_compat == false);
 		case EGfxApi::Direct3D12:
 			return false;
+		case EGfxApi::Direct3D11On12:
+			return false;
         default:
             assert(!"Need to update IsOpenGL with new API type.");
             return false;

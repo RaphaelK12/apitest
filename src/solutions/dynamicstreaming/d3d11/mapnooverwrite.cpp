@@ -3,10 +3,14 @@
 #include "mapnooverwrite.h"
 #include "problems/dynamicstreaming.h"
 
+template class DynamicStreamingD3D11MapNoOverwrite<GfxApiDirect3D11>;
+template class DynamicStreamingD3D11MapNoOverwrite<GfxApiDirect3D11On12>;
+
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
-DynamicStreamingD3D11MapNoOverwrite::DynamicStreamingD3D11MapNoOverwrite()
+template<class T>
+DynamicStreamingD3D11MapNoOverwrite<T>::DynamicStreamingD3D11MapNoOverwrite()
 : mInputLayout()
 , mConstantBuffer()
 , mVertexShader()
@@ -21,26 +25,31 @@ DynamicStreamingD3D11MapNoOverwrite::DynamicStreamingD3D11MapNoOverwrite()
 {}
 
 // --------------------------------------------------------------------------------------------------------------------
-DynamicStreamingD3D11MapNoOverwrite::~DynamicStreamingD3D11MapNoOverwrite()
+template<class T>
+DynamicStreamingD3D11MapNoOverwrite<T>::~DynamicStreamingD3D11MapNoOverwrite()
 {
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-bool DynamicStreamingD3D11MapNoOverwrite::Init(size_t _maxVertexCount)
+template<class T>
+bool DynamicStreamingD3D11MapNoOverwrite<T>::Init(size_t _maxVertexCount)
 {
+	if (T::m_d3d_device == 0)
+		return false;
+
     D3D11_INPUT_ELEMENT_DESC elements[] =
     {
         { "ATTR", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
     };
 
-    if (!CompileProgram(L"streaming_vb_d3d11_vs.hlsl", &mVertexShader, 
+	if (!CompileProgram( L"streaming_vb_d3d11_vs.hlsl", &mVertexShader,
                         L"streaming_vb_d3d11_ps.hlsl", &mPixelShader,
-                        ArraySize(elements), elements, &mInputLayout)) {
+						ArraySize(elements), elements, &mInputLayout, T::m_d3d_device)) {
         return false;
     }
 
     // Constant Buffer
-    HRESULT hr = CreateConstantBuffer(sizeof(Constants), nullptr, &mConstantBuffer);
+	HRESULT hr = CreateConstantBuffer( sizeof(Constants), nullptr, &mConstantBuffer, T::m_d3d_device);
     if (FAILED(hr)) {
         return false;
     }
@@ -59,7 +68,7 @@ bool DynamicStreamingD3D11MapNoOverwrite::Init(size_t _maxVertexCount)
         desc.MultisampleEnable = FALSE;
         desc.AntialiasedLineEnable = FALSE;
 
-        hr = g_d3d_device->CreateRasterizerState(&desc, &mRasterizerState);
+        hr = T::m_d3d_device->CreateRasterizerState(&desc, &mRasterizerState);
         if (FAILED(hr)) {
             return false;
         }
@@ -80,7 +89,7 @@ bool DynamicStreamingD3D11MapNoOverwrite::Init(size_t _maxVertexCount)
         rtDesc.BlendOpAlpha = D3D11_BLEND_OP_ADD;
         rtDesc.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 
-        hr = g_d3d_device->CreateBlendState(&desc, &mBlendState);
+        hr = T::m_d3d_device->CreateBlendState(&desc, &mBlendState);
         if (FAILED(hr)) {
             return false;
         }
@@ -103,7 +112,7 @@ bool DynamicStreamingD3D11MapNoOverwrite::Init(size_t _maxVertexCount)
         desc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
         desc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
 
-        hr = g_d3d_device->CreateDepthStencilState(&desc, &mDepthStencilState);
+        hr = T::m_d3d_device->CreateDepthStencilState(&desc, &mDepthStencilState);
         if (FAILED(hr)) {
             return false;
         }
@@ -125,7 +134,7 @@ bool DynamicStreamingD3D11MapNoOverwrite::Init(size_t _maxVertexCount)
         desc.MinLOD = 0;
         desc.MaxLOD = D3D11_FLOAT32_MAX;
 
-        hr = g_d3d_device->CreateSamplerState(&desc, &mSamplerState);
+        hr = T::m_d3d_device->CreateSamplerState(&desc, &mSamplerState);
         if (FAILED(hr)) {
             return false;
         }
@@ -133,7 +142,7 @@ bool DynamicStreamingD3D11MapNoOverwrite::Init(size_t _maxVertexCount)
 
     // Dynamic vertex buffer
     mParticleBufferSize = kTripleBuffer * sizeof(Vec2) * _maxVertexCount;
-    hr = CreateDynamicVertexBuffer(mParticleBufferSize, nullptr, &mDynamicVertexBuffer);
+	hr = CreateDynamicVertexBuffer(mParticleBufferSize, nullptr, &mDynamicVertexBuffer, T::m_d3d_device);
     if (FAILED(hr)) {
         return false;
     }
@@ -142,13 +151,14 @@ bool DynamicStreamingD3D11MapNoOverwrite::Init(size_t _maxVertexCount)
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-void DynamicStreamingD3D11MapNoOverwrite::Render(const std::vector<Vec2>& _vertices)
+template<class T>
+void DynamicStreamingD3D11MapNoOverwrite<T>::Render(const std::vector<Vec2>& _vertices)
 {
     Constants cb;
     cb.width = 2.0f / mWidth;
     cb.height = -2.0f / mHeight;
 
-    g_d3d_context->UpdateSubresource(mConstantBuffer, 0, nullptr, &cb, 0, 0);
+    T::m_d3d_context->UpdateSubresource(mConstantBuffer, 0, nullptr, &cb, 0, 0);
 
     ID3D11Buffer* ia_buffers[] = { mDynamicVertexBuffer };
     UINT ia_strides[] = { sizeof(Vec2) };
@@ -156,17 +166,17 @@ void DynamicStreamingD3D11MapNoOverwrite::Render(const std::vector<Vec2>& _verti
 
     float blendFactor[4] = { 0, 0, 0, 0 };
 
-    g_d3d_context->IASetInputLayout(mInputLayout);
-    g_d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    g_d3d_context->IASetVertexBuffers(0, 1, ia_buffers, ia_strides, ia_offsets);
-    g_d3d_context->VSSetShader(mVertexShader, nullptr, 0);
-    g_d3d_context->VSSetConstantBuffers(0, 1, &mConstantBuffer);
-    g_d3d_context->GSSetShader(nullptr, nullptr, 0);
-    g_d3d_context->RSSetState(mRasterizerState);
-    g_d3d_context->PSSetShader(mPixelShader, nullptr, 0);
-    g_d3d_context->PSSetSamplers(0, 1, &mSamplerState);
-    g_d3d_context->OMSetBlendState(mBlendState, blendFactor, 0xffffffff);
-    g_d3d_context->OMSetDepthStencilState(mDepthStencilState, 0);
+    T::m_d3d_context->IASetInputLayout(mInputLayout);
+    T::m_d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    T::m_d3d_context->IASetVertexBuffers(0, 1, ia_buffers, ia_strides, ia_offsets);
+    T::m_d3d_context->VSSetShader(mVertexShader, nullptr, 0);
+    T::m_d3d_context->VSSetConstantBuffers(0, 1, &mConstantBuffer);
+    T::m_d3d_context->GSSetShader(nullptr, nullptr, 0);
+    T::m_d3d_context->RSSetState(mRasterizerState);
+    T::m_d3d_context->PSSetShader(mPixelShader, nullptr, 0);
+    T::m_d3d_context->PSSetSamplers(0, 1, &mSamplerState);
+    T::m_d3d_context->OMSetBlendState(mBlendState, blendFactor, 0xffffffff);
+    T::m_d3d_context->OMSetDepthStencilState(mDepthStencilState, 0);
 
     const int kVertexSizeBytes = sizeof(Vec2);
     const int kParticleCount = int(_vertices.size()) / kVertsPerParticle;
@@ -186,12 +196,12 @@ void DynamicStreamingD3D11MapNoOverwrite::Render(const std::vector<Vec2>& _verti
         }
 
         D3D11_MAPPED_SUBRESOURCE mappedResource;
-        if (SUCCEEDED(g_d3d_context->Map(mDynamicVertexBuffer, 0, mapType, 0, &mappedResource))) {
+        if (SUCCEEDED(T::m_d3d_context->Map(mDynamicVertexBuffer, 0, mapType, 0, &mappedResource))) {
             void* dst = static_cast<unsigned char*>(mappedResource.pData) + dstOffset;
             memcpy(dst, &_vertices[srcOffset], kParticleSizeBytes);
-            g_d3d_context->Unmap(mDynamicVertexBuffer, 0);
+            T::m_d3d_context->Unmap(mDynamicVertexBuffer, 0);
 
-            g_d3d_context->Draw(kVertsPerParticle, dstOffset / kVertexSizeBytes);
+            T::m_d3d_context->Draw(kVertsPerParticle, dstOffset / kVertexSizeBytes);
         }
     }
 
@@ -199,7 +209,8 @@ void DynamicStreamingD3D11MapNoOverwrite::Render(const std::vector<Vec2>& _verti
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-void DynamicStreamingD3D11MapNoOverwrite::Shutdown()
+template<class T>
+void DynamicStreamingD3D11MapNoOverwrite<T>::Shutdown()
 {
     SafeRelease(mDynamicVertexBuffer);
 

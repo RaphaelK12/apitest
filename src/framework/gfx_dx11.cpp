@@ -9,15 +9,12 @@
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
 
-// Globals
-static IDXGIFactory*	g_dxgi_factory;
-ID3D11Device*			g_d3d_device;
-D3D_FEATURE_LEVEL		g_d3d_feature_level;
-ID3D11DeviceContext*	g_d3d_context;
-
 GfxBaseApi *CreateGfxDirect3D11() { return new GfxApiDirect3D11; }
 
 static HWND GetHwnd(SDL_Window* _wnd);
+
+ID3D11Device* GfxApiDirect3D11::m_d3d_device;
+ID3D11DeviceContext* GfxApiDirect3D11::m_d3d_context;
 
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
@@ -42,12 +39,12 @@ bool GfxApiDirect3D11::Init(const std::string& _title, int _x, int _y, int _widt
 
     mWnd = SDL_CreateWindow(_title.c_str(), _x, _y, _width, _height, SDL_WINDOW_HIDDEN);
 
-    HRESULT hr = CreateDXGIFactory(__uuidof(IDXGIFactory), reinterpret_cast<void**>(&g_dxgi_factory));
+    HRESULT hr = CreateDXGIFactory(__uuidof(IDXGIFactory), reinterpret_cast<void**>(&m_dxgi_factory));
     if (FAILED(hr))
         return false;
 
     IDXGIAdapter* dxgi_adapter;
-    hr = g_dxgi_factory->EnumAdapters(0, &dxgi_adapter);
+    hr = m_dxgi_factory->EnumAdapters(0, &dxgi_adapter);
     if (FAILED(hr))
         return false;
 
@@ -72,11 +69,14 @@ bool GfxApiDirect3D11::Init(const std::string& _title, int _x, int _y, int _widt
         feature_levels,
         ARRAYSIZE(feature_levels),
         D3D11_SDK_VERSION,
-        &g_d3d_device,
-        &g_d3d_feature_level,
-        &g_d3d_context);
+		&m_real_device,
+        &m_d3d_feature_level,
+        &m_real_context);
 
     dxgi_adapter->Release();
+
+	m_d3d_device = m_real_device;
+	m_d3d_context = m_real_context;
 
     if (FAILED(hr))
         return false;
@@ -86,7 +86,7 @@ bool GfxApiDirect3D11::Init(const std::string& _title, int _x, int _y, int _widt
     }
 
     // Set the render target and depth targets.
-    g_d3d_context->OMSetRenderTargets(1, &mColorView, mDepthStencilView);
+	m_real_context->OMSetRenderTargets(1, &mColorView, mDepthStencilView);
 
     return true;
 }
@@ -98,13 +98,13 @@ void GfxApiDirect3D11::Shutdown()
     SafeRelease(mDepthStencilView);
     SafeRelease(mSwapChain);
 
-    if (g_d3d_context) {
-        g_d3d_context->ClearState();
+	if (m_real_context) {
+		m_real_context->ClearState();
     }
 
-    SafeRelease(g_d3d_context);
-    SafeRelease(g_d3d_device);
-    SafeRelease(g_dxgi_factory);
+	SafeRelease(m_real_context);
+	SafeRelease(m_real_device);
+    SafeRelease(m_dxgi_factory);
 
     if (mWnd) {
         SDL_DestroyWindow(mWnd);
@@ -137,10 +137,10 @@ void GfxApiDirect3D11::Clear(Vec4 _clearColor, GLfloat _clearDepth)
     vp.MaxDepth = 1.0f;
     vp.TopLeftX = 0;
     vp.TopLeftY = 0;
-    g_d3d_context->RSSetViewports(1, &vp);
+	m_real_context->RSSetViewports(1, &vp);
 
-    g_d3d_context->ClearRenderTargetView(mColorView, &_clearColor.x);
-    g_d3d_context->ClearDepthStencilView(mDepthStencilView, D3D11_CLEAR_DEPTH, _clearDepth, 0);
+	m_real_context->ClearRenderTargetView(mColorView, &_clearColor.x);
+	m_real_context->ClearDepthStencilView(mDepthStencilView, D3D11_CLEAR_DEPTH, _clearDepth, 0);
 }
 
 // --------------------------------------------------------------------------------------------------------------------
@@ -171,15 +171,15 @@ bool GfxApiDirect3D11::CreateSwapChain()
     swap_chain_desc.Flags = 0;
 
     HRESULT hr = S_OK;
-    if (FAILED(hr = g_dxgi_factory->CreateSwapChain(g_d3d_device, &swap_chain_desc, &mSwapChain))) {
+	if (FAILED(hr = m_dxgi_factory->CreateSwapChain(m_real_device, &swap_chain_desc, &mSwapChain))) {
         return false;
     }
 
-    if (FAILED(hr = CreateRenderTarget(mSwapChain, &mColorView))) {
+	if (FAILED(hr = CreateRenderTarget(mSwapChain, &mColorView, m_real_device))) {
         return false;
     }
 
-    if (FAILED(hr = CreateDepthBuffer(mSwapChain, &mDepthStencilView))) {
+	if (FAILED(hr = CreateDepthBuffer(mSwapChain, &mDepthStencilView, m_real_device))) {
         return false;
     }
 
@@ -198,7 +198,7 @@ TestCase* GfxApiDirect3D11::create_test(TestId id)
 }
 #endif
 
-HRESULT CreateRenderTarget(IDXGISwapChain* dxgi_swap_chain, ID3D11RenderTargetView** out_render_target_view)
+HRESULT CreateRenderTarget(IDXGISwapChain* dxgi_swap_chain, ID3D11RenderTargetView** out_render_target_view, ID3D11Device* device)
 {
     // Get the back buffer from the swap chain
     ID3D11Texture2D* back_buffer;
@@ -208,7 +208,7 @@ HRESULT CreateRenderTarget(IDXGISwapChain* dxgi_swap_chain, ID3D11RenderTargetVi
 
     // Create a Render target view
     ID3D11RenderTargetView* render_target_view;
-    hr = g_d3d_device->CreateRenderTargetView(back_buffer, nullptr, &render_target_view);
+	hr = device->CreateRenderTargetView(back_buffer, nullptr, &render_target_view);
     back_buffer->Release();
 
     if (FAILED(hr))
@@ -218,7 +218,7 @@ HRESULT CreateRenderTarget(IDXGISwapChain* dxgi_swap_chain, ID3D11RenderTargetVi
     return S_OK;
 }
 
-HRESULT CreateDepthBuffer(IDXGISwapChain* dxgi_swap_chain, ID3D11DepthStencilView** out_depth_stencil_view)
+HRESULT CreateDepthBuffer(IDXGISwapChain* dxgi_swap_chain, ID3D11DepthStencilView** out_depth_stencil_view, ID3D11Device* device)
 {
     // Get the back buffer from the swap chain
     ID3D11Texture2D* back_buffer;
@@ -252,7 +252,7 @@ HRESULT CreateDepthBuffer(IDXGISwapChain* dxgi_swap_chain, ID3D11DepthStencilVie
     tex_desc.MiscFlags = 0;
 
     ID3D11Texture2D* d3d_depth_stencil_tex;
-    hr = g_d3d_device->CreateTexture2D(&tex_desc, nullptr, &d3d_depth_stencil_tex);
+	hr = device->CreateTexture2D(&tex_desc, nullptr, &d3d_depth_stencil_tex);
     if (FAILED(hr))
         return hr;
 
@@ -265,7 +265,7 @@ HRESULT CreateDepthBuffer(IDXGISwapChain* dxgi_swap_chain, ID3D11DepthStencilVie
     dsv_desc.Texture2D.MipSlice = 0;
 
     ID3D11DepthStencilView* d3d_depth_stencil_view;
-    hr = g_d3d_device->CreateDepthStencilView(d3d_depth_stencil_tex, &dsv_desc, &d3d_depth_stencil_view);
+	hr = device->CreateDepthStencilView(d3d_depth_stencil_tex, &dsv_desc, &d3d_depth_stencil_view);
     d3d_depth_stencil_tex->Release();
 
     if (FAILED(hr))
@@ -276,7 +276,7 @@ HRESULT CreateDepthBuffer(IDXGISwapChain* dxgi_swap_chain, ID3D11DepthStencilVie
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-ID3D11Texture2D* NewTexture2DFromDetails(const TextureDetails& _texDetails)
+ID3D11Texture2D* NewTexture2DFromDetails(const TextureDetails& _texDetails, ID3D11Device* device)
 {
     const DXGI_SAMPLE_DESC AliasedTexture = { 1, 0 };
 
@@ -306,7 +306,7 @@ ID3D11Texture2D* NewTexture2DFromDetails(const TextureDetails& _texDetails)
     }
 
     ID3D11Texture2D* retTex2D = nullptr;
-    HRESULT hr = g_d3d_device->CreateTexture2D(&desc, initialDatas.data(), &retTex2D);
+	HRESULT hr = device->CreateTexture2D(&desc, initialDatas.data(), &retTex2D);
     if (FAILED(hr)) {
         SafeRelease(retTex2D);    
     }
@@ -315,12 +315,12 @@ ID3D11Texture2D* NewTexture2DFromDetails(const TextureDetails& _texDetails)
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-ID3D11ShaderResourceView* NewTexture2DSRVFromDetails(const TextureDetails& _texDetails)
+ID3D11ShaderResourceView* NewTexture2DSRVFromDetails(const TextureDetails& _texDetails, ID3D11Device* device)
 {
-    ID3D11Texture2D* tex2D = NewTexture2DFromDetails(_texDetails);
+	ID3D11Texture2D* tex2D = NewTexture2DFromDetails(_texDetails, device);
     if (tex2D) {
         ID3D11ShaderResourceView* retSrv = nullptr;
-        HRESULT hr = g_d3d_device->CreateShaderResourceView(tex2D, nullptr, &retSrv);
+		HRESULT hr = device->CreateShaderResourceView(tex2D, nullptr, &retSrv);
         SafeRelease(tex2D);
 
         if (FAILED(hr)) {
@@ -335,7 +335,7 @@ ID3D11ShaderResourceView* NewTexture2DSRVFromDetails(const TextureDetails& _texD
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-HRESULT CreateConstantBuffer(int size, const void* data, ID3D11Buffer** out_buffer)
+HRESULT CreateConstantBuffer(int size, const void* data, ID3D11Buffer** out_buffer, ID3D11Device* device)
 {
     D3D11_BUFFER_DESC desc = { 0 };
     desc.Usage = D3D11_USAGE_DEFAULT;
@@ -346,17 +346,17 @@ HRESULT CreateConstantBuffer(int size, const void* data, ID3D11Buffer** out_buff
     D3D11_SUBRESOURCE_DATA initialData = { 0 };
     initialData.pSysMem = data;
 
-    return g_d3d_device->CreateBuffer(&desc, data ? &initialData : nullptr, out_buffer);
+	return device->CreateBuffer(&desc, data ? &initialData : nullptr, out_buffer);
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-HRESULT CreateDynamicVertexBuffer(int size, const void* data, ID3D11Buffer** _outBuffer)
+HRESULT CreateDynamicVertexBuffer(int size, const void* data, ID3D11Buffer** _outBuffer, ID3D11Device* device)
 {
-    return CreateDynamicVertexBuffer(size, data, D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_WRITE, _outBuffer);
+	return CreateDynamicVertexBuffer(size, data, D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_WRITE, _outBuffer, device);
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-HRESULT CreateDynamicVertexBuffer(int _size, const void* _data, D3D11_USAGE _usage, UINT _cpuAccessFlags, ID3D11Buffer** _outBuffer)
+HRESULT CreateDynamicVertexBuffer(int _size, const void* _data, D3D11_USAGE _usage, UINT _cpuAccessFlags, ID3D11Buffer** _outBuffer, ID3D11Device* device)
 {
     D3D11_BUFFER_DESC desc = { 0 };
     desc.Usage = _usage;
@@ -367,7 +367,7 @@ HRESULT CreateDynamicVertexBuffer(int _size, const void* _data, D3D11_USAGE _usa
     D3D11_SUBRESOURCE_DATA initialData = { 0 };
     initialData.pSysMem = _data;
 
-    return g_d3d_device->CreateBuffer(&desc, _data ? &initialData : nullptr, _outBuffer);
+	return device->CreateBuffer(&desc, _data ? &initialData : nullptr, _outBuffer);
 }
 
 // --------------------------------------------------------------------------------------------------------------------
@@ -406,7 +406,7 @@ ID3DBlob* CompileShader(const std::wstring& _shaderFilename, const char* _shader
 // --------------------------------------------------------------------------------------------------------------------
 bool CompileProgram(const std::wstring& _vsFilename, ID3D11VertexShader** _outVertexShader,
                     const std::wstring& _psFilename, ID3D11PixelShader** _outPixelShader,
-                    UINT _inputElementCount, const D3D11_INPUT_ELEMENT_DESC* _inputElementDescs, ID3D11InputLayout** _outInputLayout)
+                    UINT _inputElementCount, const D3D11_INPUT_ELEMENT_DESC* _inputElementDescs, ID3D11InputLayout** _outInputLayout, ID3D11Device* device)
 {
     bool completeSuccess = false;
 
@@ -419,15 +419,15 @@ bool CompileProgram(const std::wstring& _vsFilename, ID3D11VertexShader** _outVe
         goto CompileFailed;
     }
 
-    g_d3d_device->CreateVertexShader(vsCode->GetBufferPointer(), vsCode->GetBufferSize(), nullptr, _outVertexShader);
-    g_d3d_device->CreatePixelShader(psCode->GetBufferPointer(), psCode->GetBufferSize(), nullptr, _outPixelShader);
+	device->CreateVertexShader(vsCode->GetBufferPointer(), vsCode->GetBufferSize(), nullptr, _outVertexShader);
+	device->CreatePixelShader(psCode->GetBufferPointer(), psCode->GetBufferSize(), nullptr, _outPixelShader);
 
     if (!*_outVertexShader || !*_outPixelShader) {
         console::warn("Either the VS or the PS succeeded compilation but failed Creation, which shouldn't happen.");
         goto CreateShaderFailed;
     }
     
-    if (FAILED(g_d3d_device->CreateInputLayout(_inputElementDescs, _inputElementCount, vsCode->GetBufferPointer(), vsCode->GetBufferSize(), _outInputLayout))) {
+	if (FAILED(device->CreateInputLayout(_inputElementDescs, _inputElementCount, vsCode->GetBufferPointer(), vsCode->GetBufferSize(), _outInputLayout))) {
         console::warn("We failed to create an input layout to match the provided vertex shader. This will require debugging.");
         goto CreateInputLayoutFailed;
     }
