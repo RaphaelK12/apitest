@@ -186,7 +186,6 @@ void TexturedQuadsD3D11Naive<T>::Render(const std::vector<Matrix>& _transforms)
     ConstantsPerFrame cFrame;
     cFrame.ViewProjection = mProj * view;
     
-
     T::m_d3d_context->UpdateSubresource(mConstantBufferPerFrame, 0, nullptr, &cFrame, 0, 0);
 
     ID3D11Buffer* ia_buffers[] = { mVertexBuffer };
@@ -218,7 +217,7 @@ void TexturedQuadsD3D11Naive<T>::Render(const std::vector<Matrix>& _transforms)
     auto srvIt = mTextureSRVs.begin();
 
     ConstantsPerDraw cDraw;
-    for (size_t u = 0; u < xformCount; ++u) {
+    for (size_t u = 0; u < xformCount / 4; ++u) {
         cDraw.World = transpose(_transforms[u]);
         T::m_d3d_context->UpdateSubresource(mConstantBufferPerDraw, 0, nullptr, &cDraw, 0, 0);
 

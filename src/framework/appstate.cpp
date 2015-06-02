@@ -479,6 +479,9 @@ void ApplicationState::createGfxApis()
 		}
 	}
 
+	// d3d11on12 is not quite stable yet, "UpdateSubresource" will introduces a huge memory allocation, seems like a bug.
+	return;
+
 	tmpApi = CreateGfxDirect3D11On12();
 	if (tmpApi) {
 		if (tmpApi->Init("apitest - Direct3D11On12", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, mResWidth, mResHeight)) {

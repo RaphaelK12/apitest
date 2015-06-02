@@ -12,10 +12,9 @@ comptr<ID3D12Device>				g_D3D12Device;
 comptr<ID3D12CommandQueue>			g_CommandQueue;
 comptr<ID3D12CommandAllocator>		g_CommandAllocator[NUM_ACCUMULATED_FRAMES];
 comptr<ID3D12DescriptorHeap>		g_HeapRTV;
-comptr<ID3D12DescriptorHeap>		g_HeapRTVOri[BACK_BUFFER_COUNT];
 comptr<ID3D12DescriptorHeap>		g_HeapDSV;
 comptr<ID3D12Resource>				g_BackBuffer[BACK_BUFFER_COUNT];
-comptr<ID3D12Resource>				g_DepthStencilBuffer;
+comptr<ID3D12Resource>				g_DepthStencilBuffer[BACK_BUFFER_COUNT];
 static comptr<ID3D12CommandAllocator>		g_CopyCommandAllocator;
 static comptr<ID3D12GraphicsCommandList>	g_CopyCommand;
 int									g_curContext = 0;
@@ -62,10 +61,10 @@ bool GfxApiDirect3D12::Init(const std::string& _title, int _x, int _y, int _widt
 		return false;
 
 #if _DEBUG
-	/*ID3D12Debug* d3d12DebugController{};
+	ID3D12Debug* d3d12DebugController{};
 	D3D12GetDebugInterface(__uuidof(ID3D12Debug), (void**)&d3d12DebugController);
 	d3d12DebugController->EnableDebugLayer();
-	d3d12DebugController->Release();*/
+	d3d12DebugController->Release();
 #endif
 
 	// Create D3D12 Device
@@ -93,17 +92,9 @@ void GfxApiDirect3D12::Shutdown()
 {
 	g_FinishFence.release();
 
-#if SWAPBUFFER_SEQUENTIAL
-	for (int i = 0; i < BACK_BUFFER_COUNT; ++i )
-		g_HeapRTVOri[i].release();
-#else
 	g_HeapRTV.release();
-#endif
-
-	g_BackBuffer[0].release();
-	g_BackBuffer[1].release();
 	g_HeapDSV.release();
-	g_DepthStencilBuffer.release();
+	
 	m_SwapChain.release();
 
 	for (int i = 0; i < NUM_ACCUMULATED_FRAMES; ++i)
@@ -111,6 +102,11 @@ void GfxApiDirect3D12::Shutdown()
 		g_CommandAllocator[i].release();
 		m_BeginCommandList[i].release();
 		m_EndCommandList[i].release();
+	}
+	for (int i = 0; i < BACK_BUFFER_COUNT; ++i)
+	{
+		g_BackBuffer[i].release();
+		g_DepthStencilBuffer[i].release();
 	}
 
 	g_CommandQueue.release();
@@ -157,9 +153,7 @@ void GfxApiDirect3D12::Clear(Vec4 _clearColor, GLfloat _clearDepth)
 	HRESULT hr = g_CommandAllocator[g_curContext]->Reset();
 	if (FAILED(hr))
 		return;
-
-	g_HeapRTV = g_HeapRTVOri[g_backBufferIndex];
-
+	
 	// reset command list
 	m_BeginCommandList[g_curContext]->Reset(g_CommandAllocator[g_curContext], 0);
 
@@ -167,10 +161,10 @@ void GfxApiDirect3D12::Clear(Vec4 _clearColor, GLfloat _clearDepth)
 	AddResourceBarrier(m_BeginCommandList[g_curContext], g_BackBuffer[g_backBufferIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 	// Bind render target for drawing
-	m_BeginCommandList[g_curContext]->ClearRenderTargetView(g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), &_clearColor.x, 0, 0);
+	m_BeginCommandList[g_curContext]->ClearRenderTargetView(GetRenderTargetHandle(), &_clearColor.x, 0, 0);
 
 	// Clear depth buffer
-	m_BeginCommandList[g_curContext]->ClearDepthStencilView(g_HeapDSV->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, 0);
+	m_BeginCommandList[g_curContext]->ClearDepthStencilView(GetDepthStencialHandle(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, 0);
 
 	// Close the event list
 	m_BeginCommandList[g_curContext]->Close();
@@ -245,15 +239,10 @@ bool GfxApiDirect3D12::CreateSwapChain()
 HRESULT GfxApiDirect3D12::CreateRenderTarget()
 {
 	// Create descriptor heap for RTV
-	D3D12_DESCRIPTOR_HEAP_DESC heapDescRTV = { D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 1, D3D12_DESCRIPTOR_HEAP_FLAG_NONE, 0 };
-
-	HRESULT hr;
-	for (int i = 0; i < BACK_BUFFER_COUNT; ++i)
-	{
-		hr = g_D3D12Device->CreateDescriptorHeap(&heapDescRTV, __uuidof(ID3D12DescriptorHeap), (void **)&g_HeapRTVOri[i]);
-		if (FAILED(hr))
-			return hr;
-	}
+	D3D12_DESCRIPTOR_HEAP_DESC heapDescRTV = { D3D12_DESCRIPTOR_HEAP_TYPE_RTV, BACK_BUFFER_COUNT, D3D12_DESCRIPTOR_HEAP_FLAG_NONE, 0 };
+	HRESULT hr = g_D3D12Device->CreateDescriptorHeap(&heapDescRTV, __uuidof(ID3D12DescriptorHeap), (void **)&g_HeapRTV);
+	if (FAILED(hr))
+		return hr;
 
 	for (int i = 0; i < BACK_BUFFER_COUNT; ++i)
 	{
@@ -263,8 +252,13 @@ HRESULT GfxApiDirect3D12::CreateRenderTarget()
 	}
 
 	// create render target view
-	for (int i = 0; i < BACK_BUFFER_COUNT; ++i )
-		g_D3D12Device->CreateRenderTargetView(g_BackBuffer[i], 0, g_HeapRTVOri[i]->GetCPUDescriptorHandleForHeapStart());
+	D3D12_CPU_DESCRIPTOR_HANDLE handle = g_HeapRTV->GetCPUDescriptorHandleForHeapStart();
+	UINT descriptorSize = g_D3D12Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	for (int i = 0; i < BACK_BUFFER_COUNT; ++i)
+	{
+		g_D3D12Device->CreateRenderTargetView(g_BackBuffer[i], 0, handle);
+		handle.ptr += descriptorSize;
+	}
 
 	return S_OK;
 }
@@ -272,41 +266,51 @@ HRESULT GfxApiDirect3D12::CreateRenderTarget()
 // Create Depth Buffer
 HRESULT GfxApiDirect3D12::CreateDepthBuffer()
 {
-	D3D12_CLEAR_VALUE cv;
-	cv.DepthStencil.Depth = 1.0f;
-	cv.DepthStencil.Stencil = 0;
-	cv.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-	
-	if (FAILED(g_D3D12Device->CreateCommittedResource(
-		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-		D3D12_HEAP_FLAG_NONE,
-		&CD3D12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R24G8_TYPELESS, g_ClientWidth, g_ClientHeight, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL),
-		D3D12_RESOURCE_STATE_COMMON,
-		&cv,
-		__uuidof(ID3D12Resource),
-		reinterpret_cast<void**>(&g_DepthStencilBuffer))))
-	{
-		return false;
-	}
-
 	// Create descriptor heap for DSV
-	D3D12_DESCRIPTOR_HEAP_DESC deapDescDSV = { D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1, D3D12_DESCRIPTOR_HEAP_FLAG_NONE , 0 };
+	D3D12_DESCRIPTOR_HEAP_DESC deapDescDSV = { D3D12_DESCRIPTOR_HEAP_TYPE_DSV, BACK_BUFFER_COUNT, D3D12_DESCRIPTOR_HEAP_FLAG_NONE, 0 };
 	HRESULT hr = g_D3D12Device->CreateDescriptorHeap(&deapDescDSV, __uuidof(ID3D12DescriptorHeap), (void **)&g_HeapDSV);
 	if (FAILED(hr))
 		return hr;
 
-	D3D12_DEPTH_STENCIL_VIEW_DESC dsv_desc;
-	memset(&dsv_desc, 0, sizeof(dsv_desc));
-	dsv_desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-	dsv_desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-	dsv_desc.Texture2D.MipSlice = 0;
-	dsv_desc.Flags = D3D12_DSV_FLAG_NONE;
-	g_D3D12Device->CreateDepthStencilView(g_DepthStencilBuffer, &dsv_desc, g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
+	D3D12_CLEAR_VALUE cv;
+	cv.DepthStencil.Depth = 1.0f;
+	cv.DepthStencil.Stencil = 0;
+	cv.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
+	D3D12_CPU_DESCRIPTOR_HANDLE handle = g_HeapDSV->GetCPUDescriptorHandleForHeapStart();
+	UINT descriptorSize = g_D3D12Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
 	// use copy command list temporarily
 	g_CopyCommandAllocator->Reset();
 	g_CopyCommand->Reset(g_CopyCommandAllocator, 0);
-	AddResourceBarrier(g_CopyCommand, g_DepthStencilBuffer, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+
+	for (int i = 0; i < BACK_BUFFER_COUNT; ++i)
+	{
+		if (FAILED(g_D3D12Device->CreateCommittedResource(
+			&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+			D3D12_HEAP_FLAG_NONE,
+			&CD3D12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R24G8_TYPELESS, g_ClientWidth, g_ClientHeight, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL),
+			D3D12_RESOURCE_STATE_COMMON,
+			&cv,
+			__uuidof(ID3D12Resource),
+			reinterpret_cast<void**>(&g_DepthStencilBuffer[i]))))
+		{
+			return false;
+		}
+
+		D3D12_DEPTH_STENCIL_VIEW_DESC dsv_desc;
+		memset(&dsv_desc, 0, sizeof(dsv_desc));
+		dsv_desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+		dsv_desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+		dsv_desc.Texture2D.MipSlice = 0;
+		dsv_desc.Flags = D3D12_DSV_FLAG_NONE;
+		g_D3D12Device->CreateDepthStencilView(g_DepthStencilBuffer[i], &dsv_desc, handle);
+
+		AddResourceBarrier(g_CopyCommand, g_DepthStencilBuffer[i], D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+
+		handle.ptr += descriptorSize;
+	}
+	
 	g_CopyCommand->Close();
 	g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&g_CopyCommand);
 
@@ -359,6 +363,28 @@ HRESULT GfxApiDirect3D12::CreateDefaultCommandQueue()
 	g_CopyCommand->Close();
 
 	return S_OK;
+}
+
+// Get Render Target handle
+D3D12_CPU_DESCRIPTOR_HANDLE GetRenderTargetHandle()
+{
+	D3D12_CPU_DESCRIPTOR_HANDLE handle = g_HeapRTV->GetCPUDescriptorHandleForHeapStart();
+	UINT descriptorSize = g_D3D12Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+	handle.ptr += descriptorSize * g_backBufferIndex;
+
+	return handle;
+}
+
+// Get Depth Stencial handle
+D3D12_CPU_DESCRIPTOR_HANDLE GetDepthStencialHandle()
+{
+	D3D12_CPU_DESCRIPTOR_HANDLE handle = g_HeapDSV->GetCPUDescriptorHandleForHeapStart();
+	UINT descriptorSize = g_D3D12Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+
+	handle.ptr += descriptorSize * g_backBufferIndex;
+
+	return handle;
 }
 
 // --------------------------------------------------------------------------------------------------------------------

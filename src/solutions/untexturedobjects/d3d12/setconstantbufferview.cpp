@@ -4,9 +4,6 @@
 #include "framework/gfx_dx11.h"	// for some utility function
 #include <d3dcompiler.h>
 
-extern comptr<ID3D12DescriptorHeap>			g_HeapRTV;
-extern comptr<ID3D12DescriptorHeap>			g_HeapDSV;
-extern comptr<ID3D12Resource>				g_BackBuffer;
 extern comptr<ID3D12CommandQueue>			g_CommandQueue;
 extern int	g_ClientWidth;
 extern int	g_ClientHeight;
@@ -189,7 +186,7 @@ void UntexturedObjectsD3D12SetConstantBufferView::Render(const std::vector<Matri
 		m_CommandList[g_curContext]->RSSetScissorRects(1, &scissorRect);
 
 		// Set Render Target
-		m_CommandList[g_curContext]->OMSetRenderTargets(1, &g_HeapRTV->GetCPUDescriptorHandleForHeapStart(), true, &g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
+		m_CommandList[g_curContext]->OMSetRenderTargets(1, &GetRenderTargetHandle(), true, &GetDepthStencialHandle());
 
 		// Draw the triangle
 		m_CommandList[g_curContext]->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);

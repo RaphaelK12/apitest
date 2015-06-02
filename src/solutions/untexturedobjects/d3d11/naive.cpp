@@ -179,7 +179,7 @@ void UntexturedObjectsD3D11Naive<T>::Render(const std::vector<Matrix>& _transfor
 	Matrix m = _transforms[xformCount - 1];
 
     ConstantsPerDraw cDraw;
-    for (size_t u = 0; u < xformCount; ++u) {
+    for (size_t u = 0; u < xformCount ; ++u) {
         cDraw.World = transpose(_transforms[u]);
         T::m_d3d_context->UpdateSubresource(mConstantBufferPerDraw, 0, nullptr, &cDraw, 0, 0);
 
