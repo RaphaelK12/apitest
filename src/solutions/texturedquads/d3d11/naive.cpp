@@ -217,7 +217,7 @@ void TexturedQuadsD3D11Naive<T>::Render(const std::vector<Matrix>& _transforms)
     auto srvIt = mTextureSRVs.begin();
 
     ConstantsPerDraw cDraw;
-    for (size_t u = 0; u < xformCount / 4; ++u) {
+    for (size_t u = 0; u < xformCount ; ++u) {
         cDraw.World = transpose(_transforms[u]);
         T::m_d3d_context->UpdateSubresource(mConstantBufferPerDraw, 0, nullptr, &cDraw, 0, 0);
 
