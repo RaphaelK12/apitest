@@ -4,6 +4,8 @@
 #include "framework/gfx_dx11.h"	// for some utility function
 #include <d3dcompiler.h>
 
+#define USE_CBV 0
+
 extern comptr<ID3D12CommandQueue>			g_CommandQueue;
 extern int	g_ClientWidth;
 extern int	g_ClientHeight;
@@ -35,6 +37,11 @@ bool UntexturedObjectsD3D12MultiThread::Init(const std::vector<UntexturedObjects
 	if (!CreateCommands())
 		return false;
 
+#if USE_CBV
+	if (!CreateConstantBuffer(_objectCount))
+		return false;
+#endif
+
 	return true;
 }
 
@@ -46,8 +53,12 @@ bool UntexturedObjectsD3D12MultiThread::CreatePSO()
 
 	D3D12_ROOT_PARAMETER rootParameters[2];
 	memset(rootParameters, 0, sizeof(rootParameters));
+#if USE_CBV
+	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+#else
 	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
 	rootParameters[0].Constants.Num32BitValues = 16;
+#endif
 	rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
 	rootParameters[1].Constants.Num32BitValues = 16;
 	rootParameters[1].Constants.ShaderRegister = 1;
@@ -159,8 +170,15 @@ void UntexturedObjectsD3D12MultiThread::Render(const std::vector<Matrix>& _trans
 	dir = normalize(dir);
 	Vec3 eye = at - 250.0f * dir;
 	
-	m_ViewProjection = mProj * matrix_look_at(eye, at, up);
+#if USE_CBV
+	MatrixBuffer* data;
+	m_ConstantBuffer[g_curContext]->Map(0, nullptr, reinterpret_cast<void**>(&data));
+	for (unsigned int i = 0; i < (unsigned int)_transforms.size(); ++i)
+		data[4 * i].m = _transforms[i];
+#else
 	m_Transforms = _transforms.data();
+#endif
+	m_ViewProjection = mProj * matrix_look_at(eye, at, up);
 
 	for (int i = 0; i < NUM_EXT_THREAD; ++i)
 		SetEvent(m_ThreadBeginEvent[i]);
@@ -310,9 +328,34 @@ void UntexturedObjectsD3D12MultiThread::RenderPart(int pid, int total)
 	size_t end = start + m_ObjectCount / total;
 	unsigned int counter = 0;
 	for (unsigned int u = start; u < end; ++u) {
+#if USE_CBV
+		m_CommandList[g_curContext][pid]->SetGraphicsRootConstantBufferView(0, m_ConstantBuffer[g_curContext]->GetGPUVirtualAddress() + D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * u);
+#else
 		m_CommandList[g_curContext][pid]->SetGraphicsRoot32BitConstants(0, 16, &(m_Transforms[u]), 0);
+#endif
 		m_CommandList[g_curContext][pid]->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
 	}
 	
 	m_CommandList[g_curContext][pid]->Close();
+}
+
+bool UntexturedObjectsD3D12MultiThread::CreateConstantBuffer(size_t count)
+{
+	// Create a (large) constant buffer
+	for (int k = 0; k < NUM_ACCUMULATED_FRAMES; k++)
+	{
+		if (FAILED(g_D3D12Device->CreateCommittedResource(
+			&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+			D3D12_HEAP_FLAG_NONE,
+			&CD3D12_RESOURCE_DESC::Buffer(count * D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT),
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			__uuidof(ID3D12Resource),
+			reinterpret_cast<void**>(&m_ConstantBuffer[k]))))
+		{
+			return false;
+		}
+	}
+
+	return true;
 }

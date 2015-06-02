@@ -458,7 +458,7 @@ void ApplicationState::createGfxApis()
         }
     }
 	
-
+	/*
     tmpApi = CreateGfxDirect3D11();
     if (tmpApi) { 
         if (tmpApi->Init("apitest - Direct3D11", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, mResWidth, mResHeight)) {
@@ -468,7 +468,7 @@ void ApplicationState::createGfxApis()
             SafeDelete(tmpApi);
         }
     }
-
+	*/
 	tmpApi = CreateGfxDirect3D12();
 	if (tmpApi) {
 		if (tmpApi->Init("apitest - Direct3D12", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, mResWidth, mResHeight)) {

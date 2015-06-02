@@ -32,26 +32,25 @@ private:
 	comptr<ID3D12RootSignature>			m_RootSignature;
 
 	comptr<ID3D12Heap>					m_GeometryBufferHeap;
-	comptr<ID3D12Resource>				m_VertexBuffer;
-	comptr<ID3D12Resource>				m_IndexBuffer;
+	comptr<ID3D12Resource>				m_GeometryBuffer;
 	D3D12_VERTEX_BUFFER_VIEW			m_VertexBufferView;
 	D3D12_INDEX_BUFFER_VIEW				m_IndexBufferView;
 
-	comptr<ID3D12Resource>				m_ConstantBuffer;
-	MatrixBuffer*						m_ConstantBufferData;
+	comptr<ID3D12Resource>				m_ConstantBuffer[NUM_ACCUMULATED_FRAMES];
+	MatrixBuffer*						m_ConstantBufferData[NUM_ACCUMULATED_FRAMES];
 
 	size_t								m_IndexCount;
 
-	comptr<ID3D12Resource>				m_CommandBuffer;
-	comptr<ID3D12CommandSignature>		m_CommandSig;
+	comptr<ID3D12Resource>				m_CommandBuffer[NUM_ACCUMULATED_FRAMES];
+	comptr<ID3D12CommandSignature>		m_CommandSig[NUM_ACCUMULATED_FRAMES];
 
-	comptr<ID3D12CommandAllocator>		m_CommandAllocator;
-	comptr<ID3D12GraphicsCommandList>	m_CommandList;
+	comptr<ID3D12CommandAllocator>		m_CommandAllocator[NUM_ACCUMULATED_FRAMES];
+	comptr<ID3D12GraphicsCommandList>	m_CommandList[NUM_ACCUMULATED_FRAMES];
 
 	bool CreatePSO();
 	bool CreateGeometryBuffer(const std::vector<UntexturedObjectsProblem::Vertex>& _vertices,
 		const std::vector<UntexturedObjectsProblem::Index>& _indices);
 	bool CreateConstantBuffer(size_t count);
-	bool CreateCommandSignature();
+	bool CreateCommandSignature(size_t count);
 	bool CreateCommandList();
 };

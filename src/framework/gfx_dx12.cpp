@@ -14,7 +14,7 @@ comptr<ID3D12CommandAllocator>		g_CommandAllocator[NUM_ACCUMULATED_FRAMES];
 comptr<ID3D12DescriptorHeap>		g_HeapRTV;
 comptr<ID3D12DescriptorHeap>		g_HeapDSV;
 comptr<ID3D12Resource>				g_BackBuffer[BACK_BUFFER_COUNT];
-comptr<ID3D12Resource>				g_DepthStencilBuffer[BACK_BUFFER_COUNT];
+comptr<ID3D12Resource>				g_DepthStencilBuffer;
 static comptr<ID3D12CommandAllocator>		g_CopyCommandAllocator;
 static comptr<ID3D12GraphicsCommandList>	g_CopyCommand;
 int									g_curContext = 0;
@@ -106,7 +106,7 @@ void GfxApiDirect3D12::Shutdown()
 	for (int i = 0; i < BACK_BUFFER_COUNT; ++i)
 	{
 		g_BackBuffer[i].release();
-		g_DepthStencilBuffer[i].release();
+		g_DepthStencilBuffer.release();
 	}
 
 	g_CommandQueue.release();
@@ -267,7 +267,7 @@ HRESULT GfxApiDirect3D12::CreateRenderTarget()
 HRESULT GfxApiDirect3D12::CreateDepthBuffer()
 {
 	// Create descriptor heap for DSV
-	D3D12_DESCRIPTOR_HEAP_DESC deapDescDSV = { D3D12_DESCRIPTOR_HEAP_TYPE_DSV, BACK_BUFFER_COUNT, D3D12_DESCRIPTOR_HEAP_FLAG_NONE, 0 };
+	D3D12_DESCRIPTOR_HEAP_DESC deapDescDSV = { D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1, D3D12_DESCRIPTOR_HEAP_FLAG_NONE, 0 };
 	HRESULT hr = g_D3D12Device->CreateDescriptorHeap(&deapDescDSV, __uuidof(ID3D12DescriptorHeap), (void **)&g_HeapDSV);
 	if (FAILED(hr))
 		return hr;
@@ -277,39 +277,31 @@ HRESULT GfxApiDirect3D12::CreateDepthBuffer()
 	cv.DepthStencil.Stencil = 0;
 	cv.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
-	D3D12_CPU_DESCRIPTOR_HANDLE handle = g_HeapDSV->GetCPUDescriptorHandleForHeapStart();
-	UINT descriptorSize = g_D3D12Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-
 	// use copy command list temporarily
 	g_CopyCommandAllocator->Reset();
 	g_CopyCommand->Reset(g_CopyCommandAllocator, 0);
 
-	for (int i = 0; i < BACK_BUFFER_COUNT; ++i)
+	if (FAILED(g_D3D12Device->CreateCommittedResource(
+		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+		D3D12_HEAP_FLAG_NONE,
+		&CD3D12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R24G8_TYPELESS, g_ClientWidth, g_ClientHeight, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL),
+		D3D12_RESOURCE_STATE_COMMON,
+		&cv,
+		__uuidof(ID3D12Resource),
+		reinterpret_cast<void**>(&g_DepthStencilBuffer))))
 	{
-		if (FAILED(g_D3D12Device->CreateCommittedResource(
-			&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-			D3D12_HEAP_FLAG_NONE,
-			&CD3D12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R24G8_TYPELESS, g_ClientWidth, g_ClientHeight, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL),
-			D3D12_RESOURCE_STATE_COMMON,
-			&cv,
-			__uuidof(ID3D12Resource),
-			reinterpret_cast<void**>(&g_DepthStencilBuffer[i]))))
-		{
-			return false;
-		}
-
-		D3D12_DEPTH_STENCIL_VIEW_DESC dsv_desc;
-		memset(&dsv_desc, 0, sizeof(dsv_desc));
-		dsv_desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-		dsv_desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-		dsv_desc.Texture2D.MipSlice = 0;
-		dsv_desc.Flags = D3D12_DSV_FLAG_NONE;
-		g_D3D12Device->CreateDepthStencilView(g_DepthStencilBuffer[i], &dsv_desc, handle);
-
-		AddResourceBarrier(g_CopyCommand, g_DepthStencilBuffer[i], D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-
-		handle.ptr += descriptorSize;
+		return false;
 	}
+
+	D3D12_DEPTH_STENCIL_VIEW_DESC dsv_desc;
+	memset(&dsv_desc, 0, sizeof(dsv_desc));
+	dsv_desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	dsv_desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+	dsv_desc.Texture2D.MipSlice = 0;
+	dsv_desc.Flags = D3D12_DSV_FLAG_NONE;
+	g_D3D12Device->CreateDepthStencilView(g_DepthStencilBuffer, &dsv_desc, g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
+
+	AddResourceBarrier(g_CopyCommand, g_DepthStencilBuffer, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 	
 	g_CopyCommand->Close();
 	g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&g_CopyCommand);
@@ -380,10 +372,6 @@ D3D12_CPU_DESCRIPTOR_HANDLE GetRenderTargetHandle()
 D3D12_CPU_DESCRIPTOR_HANDLE GetDepthStencialHandle()
 {
 	D3D12_CPU_DESCRIPTOR_HANDLE handle = g_HeapDSV->GetCPUDescriptorHandleForHeapStart();
-	UINT descriptorSize = g_D3D12Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-
-	handle.ptr += descriptorSize * g_backBufferIndex;
-
 	return handle;
 }
 

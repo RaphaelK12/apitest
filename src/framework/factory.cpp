@@ -132,7 +132,7 @@ ProblemFactory::ProblemFactory(bool _skipInit)
 			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12SetConstants());
 			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12SetConstantBufferView());
 			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12MultiThread());
-			//Solutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12ExecuteIndirect()); not working yet
+			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12ExecuteIndirect());
 
 			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D11Naive<GfxApiDirect3D11On12>());
 		#endif

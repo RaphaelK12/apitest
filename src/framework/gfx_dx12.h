@@ -61,36 +61,6 @@ void AddResourceBarrier(
 // Load texture
 ID3D12Resource* NewTextureFromDetails(const TextureDetails& _texDetails);
 
-template <typename T>
-ID3D12Resource* CreateBufferFromVector(const std::vector<T>& _data, ID3D12Heap* heap, UINT64 offset )
-{
-	const size_t sizeofVertex = sizeof(T);
-	const size_t sizeofVertices = _data.size() * sizeofVertex;
-
-	// the buffer
-	ID3D12Resource*	buffer = 0;
-
-	// Create a placed resource that spans the whole heap
-	if (FAILED(g_D3D12Device->CreatePlacedResource(
-		heap,
-		offset,
-		&CD3D12_RESOURCE_DESC::Buffer(sizeofVertices),
-		D3D12_RESOURCE_STATE_GENERIC_READ,
-		nullptr,
-		__uuidof(ID3D12Resource),
-		reinterpret_cast<void**>(&buffer))))
-	{
-		return 0;
-	}
-
-	UINT8* pRaw = 0;
-	buffer->Map(0, 0, reinterpret_cast<void**>(&pRaw));
-	memcpy(pRaw, _data.data(), sizeofVertices);
-	buffer->Unmap(0 , 0);
-
-	return buffer;
-}
-
 // Get Render Target handle
 D3D12_CPU_DESCRIPTOR_HANDLE GetRenderTargetHandle();
 D3D12_CPU_DESCRIPTOR_HANDLE GetDepthStencialHandle();

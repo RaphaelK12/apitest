@@ -12,7 +12,6 @@ static comptr<ID3D11On12Device>			g_D3d11on12_dev;
 static comptr<ID3D11RenderTargetView>	g_D3D11RenderTargetView[BACK_BUFFER_COUNT];
 static comptr<ID3D12Resource>			g_BackBuffer[BACK_BUFFER_COUNT];
 static comptr<ID3D12Resource>			g_DepthStencilBuffer[BACK_BUFFER_COUNT];
-static comptr<ID3D11DepthStencilView>	g_D3D11DepthStencilView[BACK_BUFFER_COUNT];
 
 // Finish fence
 static comptr<ID3D12Fence> g_FinishFence;
@@ -123,6 +122,7 @@ void GfxApiDirect3D11On12::Shutdown()
 		m_d3d_context->ClearState();
 	}
 
+	SafeRelease(mDepthStencilView);
 	SafeRelease(m_d3d_context);
 	SafeRelease(m_real_device);
 	SafeRelease(m_dxgi_factory);
@@ -130,7 +130,6 @@ void GfxApiDirect3D11On12::Shutdown()
 	m_d3d_device = 0;
 	m_d3d_context = 0;
 	mColorView = 0;
-	mDepthStencilView = 0;
 
 	g_HeapDSV.release();
 	g_HeapRTV.release();
@@ -142,7 +141,6 @@ void GfxApiDirect3D11On12::Shutdown()
 		g_BackBuffer[i].release();
 		g_D3D11RenderTargetView[i].release();
 		g_DepthStencilBuffer[i].release();
-		g_D3D11DepthStencilView[i].release();
 	}
 
 	g_D3D12Device.release();
@@ -245,7 +243,6 @@ void GfxApiDirect3D11On12::Clear(Vec4 _clearColor, GLfloat _clearDepth)
 	}
 
 	mColorView = g_D3D11RenderTargetView[g_backBufferIndex];
-	mDepthStencilView = g_D3D11DepthStencilView[g_backBufferIndex];
 
 	// setup render target
 	m_real_context->OMSetRenderTargets(1, &mColorView, mDepthStencilView);
@@ -281,53 +278,42 @@ void GfxApiDirect3D11On12::SwapBuffers()
 // Create Depth Buffer
 HRESULT GfxApiDirect3D11On12::CreateDepthBuffer()
 {
-	D3D12_CLEAR_VALUE cv;
-	cv.DepthStencil.Depth = 1.0f;
-	cv.DepthStencil.Stencil = 0;
-	cv.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	DXGI_SWAP_CHAIN_DESC desc;
+	mSwapChain->GetDesc(&desc);
 
-	for (int i = 0; i < BACK_BUFFER_COUNT; ++i)
-	{
-		if (FAILED(g_D3D12Device->CreateCommittedResource(
-			&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-			D3D12_HEAP_FLAG_NONE,
-			&CD3D12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R24G8_TYPELESS, g_ClientWidth, g_ClientHeight, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL),
-			D3D12_RESOURCE_STATE_COMMON,
-			&cv,
-			__uuidof(ID3D12Resource),
-			reinterpret_cast<void**>(&g_DepthStencilBuffer[i]))))
-		{
-			return false;
-		}
+	// Create depth stencil texture
+	D3D11_TEXTURE2D_DESC tex_desc;
+	ZeroMemory(&tex_desc, sizeof(tex_desc));
+	tex_desc.Width = desc.BufferDesc.Width;
+	tex_desc.Height = desc.BufferDesc.Height;
+	tex_desc.MipLevels = 1;
+	tex_desc.ArraySize = 1;
+	tex_desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	tex_desc.SampleDesc = desc.SampleDesc;
+	tex_desc.Usage = D3D11_USAGE_DEFAULT;
+	tex_desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+	tex_desc.CPUAccessFlags = 0;
+	tex_desc.MiscFlags = 0;
 
-		// Create descriptor heap for DSV
-		D3D12_DESCRIPTOR_HEAP_DESC deapDescDSV = { D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1, D3D12_DESCRIPTOR_HEAP_FLAG_NONE, 0 };
-		HRESULT hr = g_D3D12Device->CreateDescriptorHeap(&deapDescDSV, __uuidof(ID3D12DescriptorHeap), (void **)&g_HeapDSV);
-		if (FAILED(hr))
-			return hr;
+	ID3D11Texture2D* d3d_depth_stencil_tex;
+	HRESULT hr = m_real_device->CreateTexture2D(&tex_desc, nullptr, &d3d_depth_stencil_tex);
+	if (FAILED(hr))
+		return hr;
 
-		D3D12_DEPTH_STENCIL_VIEW_DESC dsv_desc;
-		memset(&dsv_desc, 0, sizeof(dsv_desc));
-		dsv_desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-		dsv_desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-		dsv_desc.Texture2D.MipSlice = 0;
-		dsv_desc.Flags = D3D12_DSV_FLAG_NONE;
-		g_D3D12Device->CreateDepthStencilView(g_DepthStencilBuffer[i], &dsv_desc, g_HeapDSV->GetCPUDescriptorHandleForHeapStart());
+	// Create the depth stencil view
+	D3D11_DEPTH_STENCIL_VIEW_DESC dsv_desc;
+	ZeroMemory(&dsv_desc, sizeof(dsv_desc));
+	dsv_desc.Format = tex_desc.Format;
+	dsv_desc.ViewDimension =
+		tex_desc.SampleDesc.Count > 1 ? D3D11_DSV_DIMENSION_TEXTURE2DMS : D3D11_DSV_DIMENSION_TEXTURE2D;
+	dsv_desc.Texture2D.MipSlice = 0;
 
-		ID3D11Texture2D* depthbuffer;
-		D3D11_RESOURCE_FLAGS flags11 = { D3D11_BIND_DEPTH_STENCIL };
-		hr = g_D3d11on12_dev->CreateWrappedResource(g_DepthStencilBuffer[i], &flags11,
-			D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE,
-			__uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&depthbuffer));
-		if (FAILED(hr))
-			return hr;
+	ID3D11DepthStencilView* d3d_depth_stencil_view;
+	hr = m_real_device->CreateDepthStencilView(d3d_depth_stencil_tex, &dsv_desc, &mDepthStencilView);
+	d3d_depth_stencil_tex->Release();
 
-		// Create a Render target view
-		hr = m_d3d_device->CreateDepthStencilView(depthbuffer, nullptr, &g_D3D11DepthStencilView[i]);
-
-		// release depth buffer
-		depthbuffer->Release();
-	}
+	if (FAILED(hr))
+		return hr;
 
 	return S_OK;
 }
