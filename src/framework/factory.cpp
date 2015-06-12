@@ -50,6 +50,7 @@
 #	include "solutions/texturedquads/d3d12/multithread.h"
 #	include "solutions/texturedquads/d3d12/notex.h"
 #	include "solutions/dynamicstreaming/d3d12/map.h"
+#	include "solutions/dynamicstreaming/d3d12/bundle.h"
 #	include "solutions/dynamicstreaming/d3d12/multithread.h"
 #	include "solutions/untexturedobjects/d3d12/setconstants.h"
 #	include "solutions/untexturedobjects/d3d12/setconstantbufferview.h"
@@ -93,6 +94,7 @@ ProblemFactory::ProblemFactory(bool _skipInit)
         #endif
 		#if WITH_D3D12
 			mSolutions[mProblems.back()->GetName()].push_back(new DynamicStreamingD3D12Map());
+			mSolutions[mProblems.back()->GetName()].push_back(new DynamicStreamingD3D12Bundle());
 			mSolutions[mProblems.back()->GetName()].push_back(new DynamicStreamingD3D12MultiThread());
 
 			mSolutions[mProblems.back()->GetName()].push_back(new DynamicStreamingD3D11MapNoOverwrite<GfxApiDirect3D11On12>());

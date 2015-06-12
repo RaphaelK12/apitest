@@ -1,7 +1,7 @@
 #include "pch.h"
 
 #include "problems/dynamicstreaming.h"
-#include "map.h"
+#include "bundle.h"
 #include "framework/gfx_dx11.h"
 #include "framework/gfx_dx12.h"
 
@@ -17,39 +17,38 @@ extern UINT64 g_finishFenceValue;
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
-DynamicStreamingD3D12Map::DynamicStreamingD3D12Map()
+DynamicStreamingD3D12Bundle::DynamicStreamingD3D12Bundle()
 {
 }
 // --------------------------------------------------------------------------------------------------------------------
-DynamicStreamingD3D12Map::~DynamicStreamingD3D12Map()
+DynamicStreamingD3D12Bundle::~DynamicStreamingD3D12Bundle()
 {
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-bool DynamicStreamingD3D12Map::Init(size_t _maxVertexCount)
+bool DynamicStreamingD3D12Bundle::Init(size_t _maxVertexCount)
 {
 	m_VertexData = 0;
 
 	if (!CreatePSO())
 		return false;
-
-	if (!CreateCommandList())
-		return false;
-
+	
 	if (!CreateGeometryBuffer(_maxVertexCount))
 		return false;
+
+	if (!CreateCommandList())
+		return false;	
 
 	return true;
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-void DynamicStreamingD3D12Map::Render(const std::vector<Vec2>& _vertices)
+void DynamicStreamingD3D12Bundle::Render(const std::vector<Vec2>& _vertices)
 {
 	if (FAILED(m_CommandAllocator[g_curContext]->Reset()))
 		return;
 
 	kOffsetInBytes = m_BufferSize * g_curContext;
-	kOffsetInVertices = kTotalVertices * g_curContext;
 
 	Constants cb;
 	cb.width = 2.0f / mWidth;
@@ -83,18 +82,9 @@ void DynamicStreamingD3D12Map::Render(const std::vector<Vec2>& _vertices)
 
 		// Set constant
 		m_CommandList[g_curContext]->SetGraphicsRoot32BitConstants(0, 8, &cb, 0);
-
-		// draw command
-		size_t memOffset = 0;
-		size_t vertOfset = 0;
-		for (unsigned int u = 0; u < kParticleCount; ++u) {
-			// issue draw command
-			m_CommandList[g_curContext]->DrawInstanced(kVertsPerParticle, 1, kOffsetInVertices + vertOfset, 0);
-
-			// update offset
-			memOffset += kPerticleInBytes;
-			vertOfset += kVertsPerParticle;
-		}
+		
+		// Execute bundle
+		m_CommandList[g_curContext]->ExecuteBundle(m_CommandBundle[g_curContext]);
 
 		// close the command list
 		m_CommandList[g_curContext]->Close();
@@ -104,7 +94,7 @@ void DynamicStreamingD3D12Map::Render(const std::vector<Vec2>& _vertices)
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-void DynamicStreamingD3D12Map::Shutdown()
+void DynamicStreamingD3D12Bundle::Shutdown()
 {
 	// Make sure everything is flushed out before releasing anything.
 	HANDLE handleEvent = CreateEventEx(nullptr, FALSE, FALSE, EVENT_ALL_ACCESS);
@@ -125,7 +115,7 @@ void DynamicStreamingD3D12Map::Shutdown()
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-bool DynamicStreamingD3D12Map::CreatePSO()
+bool DynamicStreamingD3D12Bundle::CreatePSO()
 {
 	// compile shader first
 	comptr<ID3DBlob> vsCode = CompileShader(L"streaming_vb_d3d12_vs.hlsl", "vsMain", "vs_5_0");
@@ -178,7 +168,7 @@ bool DynamicStreamingD3D12Map::CreatePSO()
 }
 
 // --------------------------------------------------------------------------------------------------------------------
-bool DynamicStreamingD3D12Map::CreateCommandList()
+bool DynamicStreamingD3D12Bundle::CreateCommandList()
 {
 	for (int k = 0; k < NUM_ACCUMULATED_FRAMES; k++)
 	{
@@ -190,12 +180,33 @@ bool DynamicStreamingD3D12Map::CreateCommandList()
 		// Create Command List
 		g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, m_CommandAllocator[k], 0, __uuidof(ID3D12GraphicsCommandList), (void**)&m_CommandList[k]);
 		m_CommandList[k]->Close();
-	}
 
+		// create command queue allocator
+		hr = g_D3D12Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_BUNDLE, __uuidof(ID3D12CommandAllocator), (void**)&m_CommandBundleAllocator[k]);
+		if (FAILED(hr))
+			return false;
+
+		// Create Command List
+		g_D3D12Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_BUNDLE, m_CommandBundleAllocator[k], m_PipelineState, __uuidof(ID3D12GraphicsCommandList), (void**)&m_CommandBundle[k]);
+
+		// draw command
+		size_t memOffset = 0;
+		size_t vertOfset = 0;
+		for (unsigned int u = 0; u < kParticleCount; ++u) {
+			// issue draw command
+			m_CommandBundle[k]->DrawInstanced(kVertsPerParticle, 1, kTotalVertices * k + vertOfset, 0);
+
+			// update offset
+			memOffset += kPerticleInBytes;
+			vertOfset += kVertsPerParticle;
+		}
+		m_CommandBundle[k]->Close();
+	}
+	
 	return true;
 }
 
-bool DynamicStreamingD3D12Map::CreateGeometryBuffer(size_t _maxVertexCount)
+bool DynamicStreamingD3D12Bundle::CreateGeometryBuffer(size_t _maxVertexCount)
 {
 	const size_t sizeofVertex = sizeof(Vec2);
 	m_BufferSize = sizeofVertex * _maxVertexCount;
@@ -219,7 +230,6 @@ bool DynamicStreamingD3D12Map::CreateGeometryBuffer(size_t _maxVertexCount)
 	kParticleCount = _maxVertexCount / kVertsPerParticle;
 	kTotalVertices = _maxVertexCount;
 	kOffsetInBytes = m_BufferSize * g_curContext;
-	kOffsetInVertices = kTotalVertices * g_curContext;
 	kPerticleInBytes = kVertsPerParticle * kVertexSizeBytes;
 	
 	return true;

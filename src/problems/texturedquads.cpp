@@ -11,8 +11,8 @@ const char* kTextureNames[] = {
     "Media/tex/image.dds",
 };
 
-const int kObjectsX = 100;
-const int kObjectsY = 100;
+const int kObjectsX = 400;
+const int kObjectsY = 400;
 const int kObjectCount = kObjectsX * kObjectsY;
 
 // --------------------------------------------------------------------------------------------------------------------

@@ -4,7 +4,7 @@
 #include "solutions/dynamicstreamingsoln.h"
 
 const size_t kParticleCountX = 500;
-const size_t kParticleCountY = 320;
+const size_t kParticleCountY = 500;
 const size_t kParticleCount = (kParticleCountX * kParticleCountY);
 const size_t kVertexCount = kParticleCount * kVertsPerParticle;
 const size_t kParticleBufferSize = sizeof(Vec2) * kVertexCount;
