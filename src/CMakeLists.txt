@@ -152,6 +152,7 @@ if( apitest_WITH_D3D12 )
 		solutions/untexturedobjects/d3d12/setconstantbufferview.cpp
 		solutions/untexturedobjects/d3d12/executeindirect.cpp
 		solutions/untexturedobjects/d3d12/multithread.cpp
+		solutions/untexturedobjects/d3d12/bundle.cpp
 
 		solutions/dynamicstreaming/d3d12/map.cpp
 		solutions/dynamicstreaming/d3d12/bundle.cpp
@@ -419,6 +420,10 @@ source_group( "Solutions\\UntexturedObjects\\D3D12\\SetConstantBufferView" FILES
 source_group( "Solutions\\UntexturedObjects\\D3D12\\ExecuteIndirect" FILES 
 	solutions/untexturedobjects/d3d12/executeindirect.cpp
 	solutions/untexturedobjects/d3d12/executeindirect.h
+)
+source_group( "Solutions\\UntexturedObjects\\D3D12\\Bundle" FILES 
+	solutions/untexturedobjects/d3d12/bundle.cpp
+	solutions/untexturedobjects/d3d12/bundle.h
 )
 source_group( "Solutions\\UntexturedObjects\\D3D12\\MultiThread" FILES 
 	solutions/untexturedobjects/d3d12/multithread.cpp

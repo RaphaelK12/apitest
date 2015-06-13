@@ -111,6 +111,9 @@ void DynamicStreamingD3D12Bundle::Shutdown()
 	{
 		m_CommandList[k].release();
 		m_CommandAllocator[k].release();
+
+		m_CommandBundle[k].release();
+		m_CommandBundleAllocator[k].release();
 	}
 }
 

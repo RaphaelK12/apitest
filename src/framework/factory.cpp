@@ -56,6 +56,7 @@
 #	include "solutions/untexturedobjects/d3d12/setconstantbufferview.h"
 #	include "solutions/untexturedobjects/d3d12/executeindirect.h"
 #	include "solutions/untexturedobjects/d3d12/multithread.h"
+#	include "solutions/untexturedobjects/d3d12/bundle.h"
 #endif
 
 // --------------------------------------------------------------------------------------------------------------------
@@ -133,6 +134,7 @@ ProblemFactory::ProblemFactory(bool _skipInit)
 		#if WITH_D3D12
 			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12SetConstants());
 			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12SetConstantBufferView());
+			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12Bundle());
 			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12MultiThread());
 			mSolutions[mProblems.back()->GetName()].push_back(new UntexturedObjectsD3D12ExecuteIndirect());
 
