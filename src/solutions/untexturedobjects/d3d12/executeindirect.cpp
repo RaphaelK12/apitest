@@ -15,6 +15,8 @@ extern int	g_curContext;
 extern comptr<ID3D12Fence> g_FinishFence;
 extern UINT64 g_finishFenceValue;
 
+static int _count = 0;
+
 UntexturedObjectsD3D12ExecuteIndirect::UntexturedObjectsD3D12ExecuteIndirect()
 {
 }
@@ -37,6 +39,8 @@ bool UntexturedObjectsD3D12ExecuteIndirect::Init(const std::vector<UntexturedObj
 
 	if (!CreateCommandList())
 		return false;
+
+	_count = 0;
 
 	return true;
 }
@@ -172,9 +176,9 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreateCommandSignature(size_t count)
 #else
 		desc[0].Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
 		desc[0].Constant.Num32BitValuesToSet = 16;
+#endif
 		desc[1].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
 		desc[1].VertexBuffer.Slot = 0;
-#endif
 
 		D3D12_COMMAND_SIGNATURE_DESC para;
 		memset(&para, 0, sizeof(para));
@@ -259,34 +263,39 @@ void UntexturedObjectsD3D12ExecuteIndirect::Render(const std::vector<Matrix>& _t
 	for (unsigned int i = 0; i < (unsigned int)count; ++i)
 		m_ConstantBufferData[g_curContext][4 * i].m = _transforms[i];
 #else
-	// ----------------------------------------------------------------------------------
-	// The following code could be removed if CBV in execute indirect works as expected
-	UINT8* pRaw = 0;
-	struct CustomData
+	
+	if (_count<NUM_ACCUMULATED_FRAMES)
 	{
-		Matrix	 matrix;
-		D3D12_DRAW_INDEXED_ARGUMENTS arg;
-		char padding[16];
-
-		CustomData()
+		// ----------------------------------------------------------------------------------
+		// The following code could be removed if CBV in execute indirect works as expected
+		UINT8* pRaw = 0;
+		struct CustomData
 		{
-			memset(this, 0, sizeof(CustomData));
+			Matrix	 matrix;
+			D3D12_DRAW_INDEXED_ARGUMENTS arg;
+			char padding[16];
+
+			CustomData()
+			{
+				memset(this, 0, sizeof(CustomData));
+			}
+		};
+		const int sizeofCD = sizeof(CustomData);
+		std::vector<CustomData> args;
+		args.resize(count);
+		for (size_t i = 0; i < count; ++i)
+		{
+			args[i].matrix = _transforms[i];
+			args[i].arg.BaseVertexLocation = 0;
+			args[i].arg.IndexCountPerInstance = 36;
+			args[i].arg.InstanceCount = 1;
+			args[i].arg.StartIndexLocation = 0;
+			args[i].arg.StartInstanceLocation = 0;
 		}
-	};
-	const int sizeofCD = sizeof(CustomData);
-	std::vector<CustomData> args;
-	args.resize(count);
-	for (size_t i = 0; i < count; ++i)
-	{
-		args[i].matrix = _transforms[i];
-		args[i].arg.BaseVertexLocation = 0;
-		args[i].arg.IndexCountPerInstance = 36;
-		args[i].arg.InstanceCount = 1;
-		args[i].arg.StartIndexLocation = 0;
-		args[i].arg.StartInstanceLocation = 0;
+		m_CommandBuffer[g_curContext]->Map(0, 0, reinterpret_cast<void**>(&pRaw));
+		memcpy(pRaw, args.data(), count*sizeofCD);
+		++_count;
 	}
-	m_CommandBuffer[g_curContext]->Map(0, 0, reinterpret_cast<void**>(&pRaw));
-	memcpy(pRaw, args.data(), count*sizeofCD);
 #endif
 	// --------------------------------------------------------------------------------------
 
