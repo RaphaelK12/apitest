@@ -33,6 +33,7 @@ private:
 
 	comptr<ID3D12Heap>					m_GeometryBufferHeap;
 	comptr<ID3D12Resource>				m_GeometryBuffer;
+	comptr<ID3D12Resource>				m_GeometryBufferDefault;
 	D3D12_VERTEX_BUFFER_VIEW			m_VertexBufferView;
 	D3D12_INDEX_BUFFER_VIEW				m_IndexBufferView;
 
@@ -42,10 +43,14 @@ private:
 	size_t								m_IndexCount;
 
 	comptr<ID3D12Resource>				m_CommandBuffer[NUM_ACCUMULATED_FRAMES];
+	comptr<ID3D12Resource>				m_CommandBufferDefault[NUM_ACCUMULATED_FRAMES];
 	comptr<ID3D12CommandSignature>		m_CommandSig[NUM_ACCUMULATED_FRAMES];
 
 	comptr<ID3D12CommandAllocator>		m_CommandAllocator[NUM_ACCUMULATED_FRAMES];
 	comptr<ID3D12GraphicsCommandList>	m_CommandList[NUM_ACCUMULATED_FRAMES];
+
+	comptr<ID3D12CommandAllocator>		m_CopyCommandAllocator;
+	comptr<ID3D12GraphicsCommandList>	m_CopyCommand;
 
 	bool CreatePSO();
 	bool CreateGeometryBuffer(const std::vector<UntexturedObjectsProblem::Vertex>& _vertices,

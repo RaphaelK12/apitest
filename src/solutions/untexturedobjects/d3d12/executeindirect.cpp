@@ -4,7 +4,7 @@
 #include "framework/gfx_dx11.h"	// for some utility function
 #include <d3dcompiler.h>
 
-#define CBV_INEXECUTEINDIRECT 0
+#define CBV_INEXECUTEINDIRECT 1
 
 extern comptr<ID3D12CommandQueue>			g_CommandQueue;
 extern int	g_ClientWidth;
@@ -25,6 +25,9 @@ bool UntexturedObjectsD3D12ExecuteIndirect::Init(const std::vector<UntexturedObj
 	const std::vector<UntexturedObjectsProblem::Index>& _indices,
 	size_t _objectCount)
 {
+	if (!CreateCommandList())
+		return false;
+
 	if (!CreatePSO())
 		return false;
 
@@ -33,11 +36,8 @@ bool UntexturedObjectsD3D12ExecuteIndirect::Init(const std::vector<UntexturedObj
 
 	if (!CreateConstantBuffer(_objectCount))
 		return false;
-
+	
 	if (!CreateCommandSignature(_objectCount))
-		return false;
-
-	if (!CreateCommandList())
 		return false;
 
 	_count = 0;
@@ -117,7 +117,7 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreateGeometryBuffer(const std::vect
 	const size_t sizeofVertices = sizeofVertex * _vertices.size();
 	const size_t sizeofIndex = sizeof(UntexturedObjectsProblem::Index);
 	const size_t sizeofIndices = sizeofIndex * _indices.size();
-	const size_t totalSize = sizeofIndices + sizeofIndices;
+	const size_t totalSize = sizeofVertices + sizeofIndices;
 
 	if (FAILED(g_D3D12Device->CreateCommittedResource(
 		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
@@ -129,6 +129,16 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreateGeometryBuffer(const std::vect
 		)))
 		return false;
 
+	if (FAILED(g_D3D12Device->CreateCommittedResource(
+		&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+		D3D12_HEAP_FLAG_NONE,
+		&CD3D12_RESOURCE_DESC::Buffer(totalSize),
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&m_GeometryBufferDefault)
+		)))
+		return false;
+
 	UINT8* pRaw = 0;
 	m_GeometryBuffer->Map(0, 0, reinterpret_cast<void**>(&pRaw));
 	memcpy(pRaw, _vertices.data(), sizeofVertices);
@@ -136,9 +146,27 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreateGeometryBuffer(const std::vect
 	m_GeometryBuffer->Unmap(0, 0);
 
 	m_IndexCount = _indices.size();
+	
+	m_CopyCommandAllocator->Reset();
+	m_CopyCommand->Reset(m_CopyCommandAllocator, 0);
 
-	m_VertexBufferView = D3D12_VERTEX_BUFFER_VIEW{ m_GeometryBuffer->GetGPUVirtualAddress(), sizeofVertices, sizeofVertex };
-	m_IndexBufferView = D3D12_INDEX_BUFFER_VIEW{ m_GeometryBuffer->GetGPUVirtualAddress() + sizeofVertices, sizeofIndices, DXGI_FORMAT_R16_UINT };
+	AddResourceBarrier(m_CopyCommand, m_GeometryBufferDefault, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
+	m_CopyCommand->CopyBufferRegion(m_GeometryBufferDefault, 0, m_GeometryBuffer, 0, totalSize);
+	AddResourceBarrier(m_CopyCommand, m_GeometryBufferDefault, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER | D3D12_RESOURCE_STATE_INDEX_BUFFER);
+
+	m_CopyCommand->Close();
+
+	g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&m_CopyCommand);
+
+	// Make sure everything is flushed out before releasing anything.
+	HANDLE handleEvent = CreateEventEx(nullptr, FALSE, FALSE, EVENT_ALL_ACCESS);
+	g_CommandQueue->Signal(g_FinishFence, ++g_finishFenceValue);
+	g_FinishFence->SetEventOnCompletion(g_finishFenceValue, handleEvent);
+	WaitForSingleObject(handleEvent, INFINITE);
+	CloseHandle(handleEvent);
+	
+	m_VertexBufferView = D3D12_VERTEX_BUFFER_VIEW{ m_GeometryBufferDefault->GetGPUVirtualAddress(), sizeofVertices, sizeofVertex };
+	m_IndexBufferView = D3D12_INDEX_BUFFER_VIEW{ m_GeometryBufferDefault->GetGPUVirtualAddress() + sizeofVertices, sizeofIndices, DXGI_FORMAT_R16_UINT };
 
 	return true;
 }
@@ -199,6 +227,16 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreateCommandSignature(size_t count)
 			)))
 			return false;
 
+		if (FAILED(g_D3D12Device->CreateCommittedResource(
+			&CD3D12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+			D3D12_HEAP_FLAG_NONE,
+			&CD3D12_RESOURCE_DESC::Buffer(count*sizeofCD),
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&m_CommandBufferDefault[u])
+			)))
+			return false;
+
 #if CBV_INEXECUTEINDIRECT
 		std::vector<CustomData> args;
 		args.resize(count);
@@ -217,7 +255,25 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreateCommandSignature(size_t count)
 		memcpy(pRaw, args.data(), count*sizeofCD);
 		m_CommandBuffer[u]->Unmap(0, 0);
 #endif
+
+		m_CopyCommandAllocator->Reset();
+		m_CopyCommand->Reset(m_CopyCommandAllocator, 0);
+
+		AddResourceBarrier(m_CopyCommand, m_CommandBufferDefault[u], D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
+		m_CopyCommand->CopyBufferRegion(m_CommandBufferDefault[u], 0, m_CommandBuffer[u], 0, count*sizeofCD);
+		AddResourceBarrier(m_CopyCommand, m_CommandBufferDefault[u], D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+
+		m_CopyCommand->Close();
+
+		g_CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&m_CopyCommand);
 	}
+
+	// Make sure everything is flushed out before releasing anything.
+	HANDLE handleEvent = CreateEventEx(nullptr, FALSE, FALSE, EVENT_ALL_ACCESS);
+	g_CommandQueue->Signal(g_FinishFence, ++g_finishFenceValue);
+	g_FinishFence->SetEventOnCompletion(g_finishFenceValue, handleEvent);
+	WaitForSingleObject(handleEvent, INFINITE);
+	CloseHandle(handleEvent);
 
 	return true;
 }
@@ -331,14 +387,7 @@ void UntexturedObjectsD3D12ExecuteIndirect::Render(const std::vector<Matrix>& _t
 		m_CommandList[g_curContext]->SetGraphicsRoot32BitConstants(1, 16, &vp, 0);
 
 		// execute indirect
-		m_CommandList[g_curContext]->ExecuteIndirect(m_CommandSig[g_curContext], count, m_CommandBuffer[g_curContext], 0, 0, 0);
-		
-		/*for (unsigned int u = 0; u < count / 10; ++u) {
-		//	m_CommandList[g_curContext]->SetGraphicsRootConstantBufferView(0, m_ConstantBuffer->GetGPUVirtualAddress() + D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT * u);
-			//m_CommandList->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
-
-			m_CommandList[g_curContext]->ExecuteIndirect(m_CommandSig[g_curContext], 1, m_CommandBuffer[g_curContext], 0, 0, 0);
-		}*/
+		m_CommandList[g_curContext]->ExecuteIndirect(m_CommandSig[g_curContext], count, m_CommandBufferDefault[g_curContext], 0, 0, 0);
 		
 		m_CommandList[g_curContext]->Close();
 	}
@@ -359,6 +408,7 @@ void UntexturedObjectsD3D12ExecuteIndirect::Shutdown()
 	m_PipelineState.release();
 
 	m_GeometryBuffer.release();
+	m_GeometryBufferDefault.release();
 	m_GeometryBufferHeap.release();
 
 	for (int k = 0; k < NUM_ACCUMULATED_FRAMES; k++)
@@ -369,6 +419,9 @@ void UntexturedObjectsD3D12ExecuteIndirect::Shutdown()
 		m_CommandBuffer[k].release();
 		m_CommandSig[k].release();
 	}
+
+	m_CopyCommand.release();
+	m_CopyCommandAllocator.release();
 }
 
 bool UntexturedObjectsD3D12ExecuteIndirect::CreateCommandList()
@@ -384,6 +437,15 @@ bool UntexturedObjectsD3D12ExecuteIndirect::CreateCommandList()
 		g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, m_CommandAllocator[k], 0, __uuidof(ID3D12GraphicsCommandList), (void**)&m_CommandList[k]);
 		m_CommandList[k]->Close();
 	}
+
+	// create command queue allocator
+	HRESULT hr = g_D3D12Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&m_CopyCommandAllocator);
+	if (FAILED(hr))
+		return false;
+
+	// Create Command List
+	g_D3D12Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, m_CopyCommandAllocator, 0, __uuidof(ID3D12GraphicsCommandList), (void**)&m_CopyCommand);
+	m_CopyCommand->Close();
 
 	return true;
 }
