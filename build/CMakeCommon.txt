@@ -21,7 +21,7 @@ endif(DISABLE_D3D12)
 if( MSVC )
     set( SDL_LIBRARY_DIR "${CMAKE_BINARY_DIR}/thirdparty/SDL2-2.0.1/\$(Configuration)" )
 
-    set( CMAKE_CXX_FLAGS "/WX /W3 /MP /GR /EHa /arch:SSE2 /D _WIN32=1 /D WITH_D3D11=${apitest_WITH_D3D11} /D WITH_D3D12=${apitest_WITH_D3D12}" )
+    set( CMAKE_CXX_FLAGS "/WX- /W3 /MP /GR /EHa /arch:SSE2 /D _WIN32=1 /D WITH_D3D11=${apitest_WITH_D3D11} /D WITH_D3D12=${apitest_WITH_D3D12}" )
     set( CMAKE_CXX_FLAGS_DEBUG "/ZI /Od /D _DEBUG=1" )
     set( CMAKE_CXX_FLAGS_RELEASE "/Zi /O2 /D NDEBUG=1" )
 
